@@ -1,0 +1,28 @@
+apiVersion: bootstrap.plural.sh/v1alpha1
+kind: Bootstrap
+metadata:
+  name: test-aws
+  namespace: cert-manager
+spec:
+  clusterName: test-aws
+  clusterAPIComponents:
+    core:
+      version: v1.3.5
+    controlPlane:
+      version: v1.3.5
+    bootstrap:
+      version: v1.3.5
+    operator:
+      managerImage: registry.k8s.io/capi-operator/cluster-api-operator:v0.1.0
+      kubeRBACProxyImage: gcr.io/kubebuilder/kube-rbac-proxy:v0.5.0
+  cloudSpec:
+    aws:
+      region: eu-west-1
+      version: v2.0.2
+      accessKeyIdRef:
+        name: aws-variables
+        key: AWS_ACCESS_KEY_ID
+      secretAccessKeyRef:
+        name: aws-variables
+        key: AWS_SECRET_ACCESS_KEY
+
