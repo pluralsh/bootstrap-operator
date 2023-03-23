@@ -17,7 +17,7 @@ const (
 
 	BootstrapProviderName = "bootstrap"
 	CoreProviderName      = "cluster-api"
-	ControlPlaneName      = "control-plane"
+	ControlPlaneName      = "bootstrap-kubeadm"
 
 	CertManagerWebhookSecretName = "capi-operator-webhook-service-cert"
 

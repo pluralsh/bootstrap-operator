@@ -1,8 +1,11 @@
 package v1alpha1
 
 import (
+	"strings"
+
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	capierrors "sigs.k8s.io/cluster-api/errors"
 )
 
 func init() {
@@ -10,16 +13,53 @@ func init() {
 }
 
 type BootstrapSpec struct {
-	ClusterName string               `json:"clusterName"`
-	Components  ClusterAPIComponents `json:"clusterAPIComponents"`
-	CloudSpec   CloudSpec            `json:"cloudSpec"`
+	ClusterName       string         `json:"clusterName"`
+	KubernetesVersion string         `json:"kubernetesVersion"`
+	ClusterNetwork    ClusterNetwork `json:"clusterNetwork"`
+	ClusterAPI        ClusterAPI     `json:"clusterAPI"`
+	CloudSpec         CloudSpec      `json:"cloudSpec"`
+}
+
+// ClusterNetwork specifies the different networking
+// parameters for a cluster.
+type ClusterNetwork struct {
+	// APIServerPort specifies the port the API Server should bind to.
+	// Defaults to 6443.
+	// +optional
+	APIServerPort *int32 `json:"apiServerPort,omitempty"`
+
+	// The network ranges from which service VIPs are allocated.
+	// +optional
+	Services *NetworkRanges `json:"services,omitempty"`
+
+	// The network ranges from which Pod networks are allocated.
+	// +optional
+	Pods *NetworkRanges `json:"pods,omitempty"`
+
+	// Domain name for services.
+	// +optional
+	ServiceDomain string `json:"serviceDomain,omitempty"`
+}
+
+// NetworkRanges represents ranges of network addresses.
+type NetworkRanges struct {
+	CIDRBlocks []string `json:"cidrBlocks"`
+}
+
+func (n NetworkRanges) String() string {
+	if len(n.CIDRBlocks) == 0 {
+		return ""
+	}
+	return strings.Join(n.CIDRBlocks, ",")
 }
 
 type ClusterAPIComponents struct {
-	Operator     ClusterAPIOperator     `json:"operator"`
-	Core         ClusterAPICore         `json:"core"`
-	ControlPlane ClusterAPIControlPlane `json:"controlPlane"`
-	Bootstrap    ClusterAPIBootstrap    `json:"bootstrap"`
+	Operator ClusterAPIOperator `json:"operator"`
+}
+
+type ClusterAPI struct {
+	Components ClusterAPIComponents `json:"components"`
+	Version    string               `json:"version"`
 }
 
 type ClusterAPIOperator struct {
@@ -50,20 +90,44 @@ type CloudSpec struct {
 
 type AWSCloudSpec struct {
 	Region                  string `json:"region"`
+	MachinePoolReplicas     int32  `json:"machinePoolReplicas"`
+	InstanceType            string `json:"instanceType"`
 	ClusterAPIComponentSpec `json:",inline"`
 
 	AccessKeyIDRef     corev1.SecretKeySelector `json:"accessKeyIdRef"`
 	SecretAccessKeyRef corev1.SecretKeySelector `json:"secretAccessKeyRef"`
+	SessionTokenRef    corev1.SecretKeySelector `json:"sessionTokenRef"`
 }
 
 type BootstrapStatus struct {
-	// Ready is true when the provider resource is ready.
-	// +optional
-	Ready bool `json:"ready"`
+	Status `json:",inline"`
 
-	CapiOperatorStatus *Status `json:"capiOperatorStatus,omitempty"`
-	CapiBootstrap      *Status `json:"capiBootstrapStatus,omitempty"`
-	CapiCore           *Status `json:"capiCoreStatus,omitempty"`
+	CapiOperatorStatus           *Status        `json:"capiOperatorStatus,omitempty"`
+	CapiOperatorComponentsStatus *Status        `json:"capiOperatorComponentsStatus,omitempty"`
+	CapiClusterStatus            *ClusterStatus `json:"capiClusterStatus,omitempty"`
+	ProviderStatus               *Status        `json:"providerStatus,omitempty"`
+}
+
+type ClusterStatus struct {
+	Status `json:",inline"`
+	// FailureReason indicates that there is a fatal problem reconciling the
+	// state, and will be set to a token value suitable for
+	// programmatic interpretation.
+	// +optional
+	FailureReason *capierrors.ClusterStatusError `json:"failureReason,omitempty"`
+
+	// FailureMessage indicates that there is a fatal problem reconciling the
+	// state, and will be set to a descriptive error message.
+	// +optional
+	FailureMessage *string `json:"failureMessage,omitempty"`
+
+	// InfrastructureReady is the state of the infrastructure provider.
+	// +optional
+	InfrastructureReady bool `json:"infrastructureReady"`
+
+	// ControlPlaneReady defines if the control plane is ready.
+	// +optional
+	ControlPlaneReady bool `json:"controlPlaneReady"`
 }
 
 type Status struct {
@@ -80,15 +144,17 @@ type Status struct {
 	Phase ComponentPhase `json:"phase,omitempty"`
 }
 
-// +kubebuilder:validation:Enum=Creating;Running;Failed
+// +kubebuilder:validation:Enum=Started;Creating;Running;Failed;Error
 
 type ComponentPhase string
 
 // These are the valid phases of a project.
 const (
+	Started  ComponentPhase = "Started"
 	Creating ComponentPhase = "Creating"
 	Running  ComponentPhase = "Running"
 	Failed   ComponentPhase = "Failed"
+	Error    ComponentPhase = "Error"
 )
 
 // +kubebuilder:object:root=true

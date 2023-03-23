@@ -3,7 +3,6 @@ package main
 import (
 	"flag"
 	"os"
-	clusterapioperator "sigs.k8s.io/cluster-api-operator/api/v1alpha1"
 
 	certv1 "github.com/cert-manager/cert-manager/pkg/apis/certmanager/v1"
 	bv1alpha1 "github.com/pluralsh/bootstrap-operator/apis/bootstrap/v1alpha1"
@@ -13,8 +12,15 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	clusterapioperator "sigs.k8s.io/cluster-api-operator/api/v1alpha1"
+	awsinfrastructure "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
+	awscontrolplane "sigs.k8s.io/cluster-api-provider-aws/v2/controlplane/eks/api/v1beta2"
+	awsmachinepool "sigs.k8s.io/cluster-api-provider-aws/v2/exp/api/v1beta2"
+	clusterapi "sigs.k8s.io/cluster-api/api/v1beta1"
+	clusterapiexp "sigs.k8s.io/cluster-api/exp/api/v1beta1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 )
@@ -25,6 +31,12 @@ var (
 )
 
 func init() {
+	utilruntime.Must(apiextensionsv1.AddToScheme(scheme))
+	utilruntime.Must(clusterapiexp.AddToScheme(scheme))
+	utilruntime.Must(awsmachinepool.AddToScheme(scheme))
+	utilruntime.Must(awsinfrastructure.AddToScheme(scheme))
+	utilruntime.Must(awscontrolplane.AddToScheme(scheme))
+	utilruntime.Must(clusterapi.AddToScheme(scheme))
 	utilruntime.Must(clusterapioperator.AddToScheme(scheme))
 	utilruntime.Must(admissionregistrationv1.AddToScheme(scheme))
 	utilruntime.Must(certv1.AddToScheme(scheme))
@@ -39,6 +51,7 @@ func main() {
 	var metricsAddr string
 	var probeAddr string
 	var namespace string
+	var kubeconfig string
 	flag.StringVar(&namespace, "namespace", "default", "The namespace operator runs in")
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
@@ -67,9 +80,11 @@ func main() {
 	}
 
 	if err = (&controller.Reconciler{
-		Client:    mgr.GetClient(),
-		Log:       setupLog.Named("bootstrap-operator"),
-		Namespace: namespace,
+		Client:     mgr.GetClient(),
+		Log:        setupLog.Named("bootstrap-operator"),
+		Namespace:  namespace,
+		Scheme:     scheme,
+		Kubeconfig: kubeconfig,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "bootstrap")
 		os.Exit(1)

@@ -13,7 +13,13 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	clusterapioperator "sigs.k8s.io/cluster-api-operator/api/v1alpha1"
+	awsinfrastructure "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
+	awscontrolplane "sigs.k8s.io/cluster-api-provider-aws/v2/controlplane/eks/api/v1beta2"
+	awsmachinepool "sigs.k8s.io/cluster-api-provider-aws/v2/exp/api/v1beta2"
+	clusterapi "sigs.k8s.io/cluster-api/api/v1beta1"
+	clusterapiexp "sigs.k8s.io/cluster-api/exp/api/v1beta1"
 )
 
 // NamespaceCreator defines an interface to create/update Namespaces
@@ -640,6 +646,228 @@ func ReconcileCoreProviders(ctx context.Context, namedGetters []NamedCoreProvide
 
 		if err := EnsureNamedObject(ctx, types.NamespacedName{Namespace: namespace, Name: name}, createObject, client, &clusterapioperator.CoreProvider{}, false); err != nil {
 			return fmt.Errorf("failed to ensure CoreProvider %s/%s: %w", namespace, name, err)
+		}
+	}
+
+	return nil
+}
+
+// ClusterCreator defines an interface to create/update Clusters
+type ClusterCreator = func(existing *clusterapi.Cluster) (*clusterapi.Cluster, error)
+
+// NamedClusterCreatorGetter returns the name of the resource and the corresponding creator function
+type NamedClusterCreatorGetter = func() (name string, create ClusterCreator)
+
+// ClusterObjectWrapper adds a wrapper so the ClusterCreator matches ObjectCreator.
+// This is needed as Go does not support function interface matching.
+func ClusterObjectWrapper(create ClusterCreator) ObjectCreator {
+	return func(existing ctrlruntimeclient.Object) (ctrlruntimeclient.Object, error) {
+		if existing != nil {
+			return create(existing.(*clusterapi.Cluster))
+		}
+		return create(&clusterapi.Cluster{})
+	}
+}
+
+// ReconcileClusters will create and update the Clusters coming from the passed ClusterCreator slice
+func ReconcileClusters(ctx context.Context, namedGetters []NamedClusterCreatorGetter, namespace string, client ctrlruntimeclient.Client, objectModifiers ...ObjectModifier) error {
+	for _, get := range namedGetters {
+		name, create := get()
+		createObject := ClusterObjectWrapper(create)
+		createObject = createWithNamespace(createObject, namespace)
+		createObject = createWithName(createObject, name)
+
+		for _, objectModifier := range objectModifiers {
+			createObject = objectModifier(createObject)
+		}
+
+		if err := EnsureNamedObject(ctx, types.NamespacedName{Namespace: namespace, Name: name}, createObject, client, &clusterapi.Cluster{}, false); err != nil {
+			return fmt.Errorf("failed to ensure Cluster %s/%s: %w", namespace, name, err)
+		}
+	}
+
+	return nil
+}
+
+// MachinePoolCreator defines an interface to create/update MachinePools
+type MachinePoolCreator = func(existing *clusterapiexp.MachinePool) (*clusterapiexp.MachinePool, error)
+
+// NamedMachinePoolCreatorGetter returns the name of the resource and the corresponding creator function
+type NamedMachinePoolCreatorGetter = func() (name string, create MachinePoolCreator)
+
+// MachinePoolObjectWrapper adds a wrapper so the MachinePoolCreator matches ObjectCreator.
+// This is needed as Go does not support function interface matching.
+func MachinePoolObjectWrapper(create MachinePoolCreator) ObjectCreator {
+	return func(existing ctrlruntimeclient.Object) (ctrlruntimeclient.Object, error) {
+		if existing != nil {
+			return create(existing.(*clusterapiexp.MachinePool))
+		}
+		return create(&clusterapiexp.MachinePool{})
+	}
+}
+
+// ReconcileMachinePools will create and update the MachinePools coming from the passed MachinePoolCreator slice
+func ReconcileMachinePools(ctx context.Context, namedGetters []NamedMachinePoolCreatorGetter, namespace string, client ctrlruntimeclient.Client, objectModifiers ...ObjectModifier) error {
+	for _, get := range namedGetters {
+		name, create := get()
+		createObject := MachinePoolObjectWrapper(create)
+		createObject = createWithNamespace(createObject, namespace)
+		createObject = createWithName(createObject, name)
+
+		for _, objectModifier := range objectModifiers {
+			createObject = objectModifier(createObject)
+		}
+
+		if err := EnsureNamedObject(ctx, types.NamespacedName{Namespace: namespace, Name: name}, createObject, client, &clusterapiexp.MachinePool{}, false); err != nil {
+			return fmt.Errorf("failed to ensure MachinePool %s/%s: %w", namespace, name, err)
+		}
+	}
+
+	return nil
+}
+
+// AWSManagedClusterCreator defines an interface to create/update AWSManagedClusters
+type AWSManagedClusterCreator = func(existing *awsinfrastructure.AWSManagedCluster) (*awsinfrastructure.AWSManagedCluster, error)
+
+// NamedAWSManagedClusterCreatorGetter returns the name of the resource and the corresponding creator function
+type NamedAWSManagedClusterCreatorGetter = func() (name string, create AWSManagedClusterCreator)
+
+// AWSManagedClusterObjectWrapper adds a wrapper so the AWSManagedClusterCreator matches ObjectCreator.
+// This is needed as Go does not support function interface matching.
+func AWSManagedClusterObjectWrapper(create AWSManagedClusterCreator) ObjectCreator {
+	return func(existing ctrlruntimeclient.Object) (ctrlruntimeclient.Object, error) {
+		if existing != nil {
+			return create(existing.(*awsinfrastructure.AWSManagedCluster))
+		}
+		return create(&awsinfrastructure.AWSManagedCluster{})
+	}
+}
+
+// ReconcileAWSManagedClusters will create and update the AWSManagedClusters coming from the passed AWSManagedClusterCreator slice
+func ReconcileAWSManagedClusters(ctx context.Context, namedGetters []NamedAWSManagedClusterCreatorGetter, namespace string, client ctrlruntimeclient.Client, objectModifiers ...ObjectModifier) error {
+	for _, get := range namedGetters {
+		name, create := get()
+		createObject := AWSManagedClusterObjectWrapper(create)
+		createObject = createWithNamespace(createObject, namespace)
+		createObject = createWithName(createObject, name)
+
+		for _, objectModifier := range objectModifiers {
+			createObject = objectModifier(createObject)
+		}
+
+		if err := EnsureNamedObject(ctx, types.NamespacedName{Namespace: namespace, Name: name}, createObject, client, &awsinfrastructure.AWSManagedCluster{}, false); err != nil {
+			return fmt.Errorf("failed to ensure AWSManagedCluster %s/%s: %w", namespace, name, err)
+		}
+	}
+
+	return nil
+}
+
+// AWSManagedMachinePoolCreator defines an interface to create/update AWSManagedMachinePools
+type AWSManagedMachinePoolCreator = func(existing *awsmachinepool.AWSManagedMachinePool) (*awsmachinepool.AWSManagedMachinePool, error)
+
+// NamedAWSManagedMachinePoolCreatorGetter returns the name of the resource and the corresponding creator function
+type NamedAWSManagedMachinePoolCreatorGetter = func() (name string, create AWSManagedMachinePoolCreator)
+
+// AWSManagedMachinePoolObjectWrapper adds a wrapper so the AWSManagedMachinePoolCreator matches ObjectCreator.
+// This is needed as Go does not support function interface matching.
+func AWSManagedMachinePoolObjectWrapper(create AWSManagedMachinePoolCreator) ObjectCreator {
+	return func(existing ctrlruntimeclient.Object) (ctrlruntimeclient.Object, error) {
+		if existing != nil {
+			return create(existing.(*awsmachinepool.AWSManagedMachinePool))
+		}
+		return create(&awsmachinepool.AWSManagedMachinePool{})
+	}
+}
+
+// ReconcileAWSManagedMachinePools will create and update the AWSManagedMachinePools coming from the passed AWSManagedMachinePoolCreator slice
+func ReconcileAWSManagedMachinePools(ctx context.Context, namedGetters []NamedAWSManagedMachinePoolCreatorGetter, namespace string, client ctrlruntimeclient.Client, objectModifiers ...ObjectModifier) error {
+	for _, get := range namedGetters {
+		name, create := get()
+		createObject := AWSManagedMachinePoolObjectWrapper(create)
+		createObject = createWithNamespace(createObject, namespace)
+		createObject = createWithName(createObject, name)
+
+		for _, objectModifier := range objectModifiers {
+			createObject = objectModifier(createObject)
+		}
+
+		if err := EnsureNamedObject(ctx, types.NamespacedName{Namespace: namespace, Name: name}, createObject, client, &awsmachinepool.AWSManagedMachinePool{}, false); err != nil {
+			return fmt.Errorf("failed to ensure AWSManagedMachinePool %s/%s: %w", namespace, name, err)
+		}
+	}
+
+	return nil
+}
+
+// AWSManagedControlPlaneCreator defines an interface to create/update AWSManagedControlPlanes
+type AWSManagedControlPlaneCreator = func(existing *awscontrolplane.AWSManagedControlPlane) (*awscontrolplane.AWSManagedControlPlane, error)
+
+// NamedAWSManagedControlPlaneCreatorGetter returns the name of the resource and the corresponding creator function
+type NamedAWSManagedControlPlaneCreatorGetter = func() (name string, create AWSManagedControlPlaneCreator)
+
+// AWSManagedControlPlaneObjectWrapper adds a wrapper so the AWSManagedControlPlaneCreator matches ObjectCreator.
+// This is needed as Go does not support function interface matching.
+func AWSManagedControlPlaneObjectWrapper(create AWSManagedControlPlaneCreator) ObjectCreator {
+	return func(existing ctrlruntimeclient.Object) (ctrlruntimeclient.Object, error) {
+		if existing != nil {
+			return create(existing.(*awscontrolplane.AWSManagedControlPlane))
+		}
+		return create(&awscontrolplane.AWSManagedControlPlane{})
+	}
+}
+
+// ReconcileAWSManagedControlPlanes will create and update the AWSManagedControlPlanes coming from the passed AWSManagedControlPlaneCreator slice
+func ReconcileAWSManagedControlPlanes(ctx context.Context, namedGetters []NamedAWSManagedControlPlaneCreatorGetter, namespace string, client ctrlruntimeclient.Client, objectModifiers ...ObjectModifier) error {
+	for _, get := range namedGetters {
+		name, create := get()
+		createObject := AWSManagedControlPlaneObjectWrapper(create)
+		createObject = createWithNamespace(createObject, namespace)
+		createObject = createWithName(createObject, name)
+
+		for _, objectModifier := range objectModifiers {
+			createObject = objectModifier(createObject)
+		}
+
+		if err := EnsureNamedObject(ctx, types.NamespacedName{Namespace: namespace, Name: name}, createObject, client, &awscontrolplane.AWSManagedControlPlane{}, false); err != nil {
+			return fmt.Errorf("failed to ensure AWSManagedControlPlane %s/%s: %w", namespace, name, err)
+		}
+	}
+
+	return nil
+}
+
+// CustomResourceDefinitionCreator defines an interface to create/update CustomResourceDefinitions
+type CustomResourceDefinitionCreator = func(existing *apiextensionsv1.CustomResourceDefinition) (*apiextensionsv1.CustomResourceDefinition, error)
+
+// NamedCustomResourceDefinitionCreatorGetter returns the name of the resource and the corresponding creator function
+type NamedCustomResourceDefinitionCreatorGetter = func() (name string, create CustomResourceDefinitionCreator)
+
+// CustomResourceDefinitionObjectWrapper adds a wrapper so the CustomResourceDefinitionCreator matches ObjectCreator.
+// This is needed as Go does not support function interface matching.
+func CustomResourceDefinitionObjectWrapper(create CustomResourceDefinitionCreator) ObjectCreator {
+	return func(existing ctrlruntimeclient.Object) (ctrlruntimeclient.Object, error) {
+		if existing != nil {
+			return create(existing.(*apiextensionsv1.CustomResourceDefinition))
+		}
+		return create(&apiextensionsv1.CustomResourceDefinition{})
+	}
+}
+
+// ReconcileCustomResourceDefinitions will create and update the CustomResourceDefinitions coming from the passed CustomResourceDefinitionCreator slice
+func ReconcileCustomResourceDefinitions(ctx context.Context, namedGetters []NamedCustomResourceDefinitionCreatorGetter, namespace string, client ctrlruntimeclient.Client, objectModifiers ...ObjectModifier) error {
+	for _, get := range namedGetters {
+		name, create := get()
+		createObject := CustomResourceDefinitionObjectWrapper(create)
+		createObject = createWithNamespace(createObject, namespace)
+		createObject = createWithName(createObject, name)
+
+		for _, objectModifier := range objectModifiers {
+			createObject = objectModifier(createObject)
+		}
+
+		if err := EnsureNamedObject(ctx, types.NamespacedName{Namespace: namespace, Name: name}, createObject, client, &apiextensionsv1.CustomResourceDefinition{}, false); err != nil {
+			return fmt.Errorf("failed to ensure CustomResourceDefinition %s/%s: %w", namespace, name, err)
 		}
 	}
 
