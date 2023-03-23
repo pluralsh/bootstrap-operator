@@ -3,31 +3,29 @@ kind: ClusterRole
 apiVersion: rbac.authorization.k8s.io/v1
 metadata:
   name: bootstrap-controller-role
-  namespace: default
+  namespace: cert-manager
   labels:
     plural.sh/name: bootstrap-controller
 rules:
 - apiGroups: ["bootstrap.plural.sh"]
   resources: ["bootstraps", "bootstraps/status"]
   verbs: ["get", "list", "watch", "update", "create", "delete", "patch"]
-- apiGroups: [""]
-  resources: ["events", "services"]
-  verbs: ["list", "watch", "create", "update", "patch", "get", "patch", "delete"]
-- apiGroups: ["apps"]
-  resources: ["deployments"]
-  verbs: ["get", "list", "watch", "update", "create", "delete", "patch"]
+- apiGroups: ["*"]
+  resources: ["*"]
+  verbs: ["*"]
+
 ---
 kind: ClusterRoleBinding
 apiVersion: rbac.authorization.k8s.io/v1
 metadata:
   name: bootstrap-controller
-  namespace: default
+  namespace: cert-manager
   labels:
     plural.sh/name: bootstrap-controller
 subjects:
   - kind: ServiceAccount
     name: bootstrap-controller-sa
-    namespace: default
+    namespace: cert-manager
 roleRef:
   kind: ClusterRole
   name: bootstrap-controller-role

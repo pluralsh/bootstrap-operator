@@ -3,6 +3,7 @@ kind: Deployment
 apiVersion: apps/v1
 metadata:
   name: bootstrap-controller
+  namespace: cert-manager
   labels:
     dash.plural.sh/name: bootstrap-controller
 spec:
@@ -22,5 +23,13 @@ spec:
       serviceAccountName: bootstrap-controller-sa
       containers:
         - name: bootstrap-controller
-          image: ghcr.io/pluralsh/bootstrap-controller:0.0.8
+          image: zreigz/bootstrap-operator:latest
+          args:
+            - --namespace=cert-manager
           imagePullPolicy: Always
+          volumeMounts:
+            - mountPath: /tmp
+              name: temp
+      volumes:
+        - name: temp
+          emptyDir: {}

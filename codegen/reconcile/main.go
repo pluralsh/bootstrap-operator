@@ -99,6 +99,36 @@ func main() {
 				ResourceName: "CoreProvider",
 				ImportAlias:  "clusterapioperator",
 			},
+			{
+				ResourceName:       "Cluster",
+				ImportAlias:        "clusterapi",
+				ResourceImportPath: "sigs.k8s.io/cluster-api/api/v1beta1",
+			},
+			{
+				ResourceName:       "MachinePool",
+				ImportAlias:        "clusterapiexp",
+				ResourceImportPath: "sigs.k8s.io/cluster-api/exp/api/v1beta1",
+			},
+			{
+				ResourceName:       "AWSManagedCluster",
+				ImportAlias:        "awsinfrastructure",
+				ResourceImportPath: "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2",
+			},
+			{
+				ResourceName:       "AWSManagedMachinePool",
+				ImportAlias:        "awsmachinepool",
+				ResourceImportPath: "sigs.k8s.io/cluster-api-provider-aws/v2/exp/api/v1beta2",
+			},
+			{
+				ResourceName:       "AWSManagedControlPlane",
+				ImportAlias:        "awscontrolplane",
+				ResourceImportPath: "sigs.k8s.io/cluster-api-provider-aws/v2/controlplane/eks/api/v1beta2",
+			},
+			{
+				ResourceName:       "CustomResourceDefinition",
+				ImportAlias:        "apiextensionsv1",
+				ResourceImportPath: "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1",
+			},
 		},
 	}
 

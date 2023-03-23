@@ -3,6 +3,8 @@ package controller
 import (
 	"context"
 	"fmt"
+	"time"
+
 	"github.com/pluralsh/bootstrap-operator/apis/bootstrap/helper"
 	bv1alpha1 "github.com/pluralsh/bootstrap-operator/apis/bootstrap/v1alpha1"
 	"github.com/pluralsh/bootstrap-operator/pkg/resources"
@@ -11,15 +13,9 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
-	"time"
 )
 
 func (r *Reconciler) reconcileOperator(ctx context.Context, bootstrap *bv1alpha1.Bootstrap) (*ctrl.Result, error) {
-	if bootstrap.Status.CapiOperatorStatus == nil {
-		if err := r.updateOperatorStatus(ctx, bootstrap, bv1alpha1.Creating, "creating cluster API operator", false); err != nil {
-			return nil, err
-		}
-	}
 	if err := r.ensureOperatorResourcesAreDeployed(ctx, bootstrap, r.Namespace); err != nil {
 		return nil, err
 	}
@@ -77,38 +73,38 @@ func (r *Reconciler) ensureOperatorResourcesAreDeployed(ctx context.Context, boo
 	validatingWebhookConfigurationCreators := []reconciling.NamedValidatingWebhookConfigurationCreatorGetter{
 		clusterapioperator.ValidatingWebhookConfigurationCreator(data),
 	}
-	if err := reconciling.ReconcileServices(ctx, serviceCreators, r.Namespace, r); err != nil {
+	if err := reconciling.ReconcileServices(ctx, serviceCreators, r.Namespace, r.Client); err != nil {
 		return err
 	}
-	if err := reconciling.ReconcileRoles(ctx, roleCreators, r.Namespace, r); err != nil {
+	if err := reconciling.ReconcileRoles(ctx, roleCreators, r.Namespace, r.Client); err != nil {
 		return err
 	}
-	if err := reconciling.ReconcileClusterRoles(ctx, clusterRoleCreators, r.Namespace, r); err != nil {
+	if err := reconciling.ReconcileClusterRoles(ctx, clusterRoleCreators, r.Namespace, r.Client); err != nil {
 		return err
 	}
-	if err := reconciling.ReconcileRoleBindings(ctx, roleBindingCreators, r.Namespace, r); err != nil {
+	if err := reconciling.ReconcileRoleBindings(ctx, roleBindingCreators, r.Namespace, r.Client); err != nil {
 		return err
 	}
-	if err := reconciling.ReconcileClusterRoleBindings(ctx, clusterRoleBindingCreators, r.Namespace, r); err != nil {
+	if err := reconciling.ReconcileClusterRoleBindings(ctx, clusterRoleBindingCreators, r.Namespace, r.Client); err != nil {
 		return err
 	}
-	if err := reconciling.ReconcileDeployments(ctx, deploymentCreators, r.Namespace, r); err != nil {
+	if err := reconciling.ReconcileDeployments(ctx, deploymentCreators, r.Namespace, r.Client); err != nil {
 		return err
 	}
-	if err := reconciling.ReconcileCertificates(ctx, certCreators, r.Namespace, r); err != nil {
+	if err := reconciling.ReconcileCertificates(ctx, certCreators, r.Namespace, r.Client); err != nil {
 		return err
 	}
-	if err := reconciling.ReconcileIssuers(ctx, issuerCreators, r.Namespace, r); err != nil {
+	if err := reconciling.ReconcileIssuers(ctx, issuerCreators, r.Namespace, r.Client); err != nil {
 		return err
 	}
-	if err := reconciling.ReconcileValidatingWebhookConfigurations(ctx, validatingWebhookConfigurationCreators, r.Namespace, r); err != nil {
+	if err := reconciling.ReconcileValidatingWebhookConfigurations(ctx, validatingWebhookConfigurationCreators, r.Namespace, r.Client); err != nil {
 		return err
 	}
 	return nil
 }
 
 func (r *Reconciler) updateOperatorStatus(ctx context.Context, bootstrap *bv1alpha1.Bootstrap, phase bv1alpha1.ComponentPhase, message string, ready bool) error {
-	err := helper.UpdateBootstrapStatus(ctx, r, bootstrap, func(c *bv1alpha1.Bootstrap) {
+	err := helper.UpdateBootstrapStatus(ctx, r.Client, bootstrap, func(c *bv1alpha1.Bootstrap) {
 		if c.Status.CapiOperatorStatus == nil {
 			c.Status.CapiOperatorStatus = &bv1alpha1.Status{}
 		}

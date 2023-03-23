@@ -48,7 +48,7 @@ vet: ## Run go vet against code.
 	go vet ./...
 
 docker-build: ## Build docker image with the driver.
-	docker build -t ${IMG} .
+	docker build --no-cache -t ${IMG} .
 
 docker-push: ## Push docker image with the driver.
 	docker push ${IMG}

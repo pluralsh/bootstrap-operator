@@ -62,7 +62,7 @@ func DeploymentCreator(data *resources.TemplateData) reconciling.NamedDeployment
 					Containers: []corev1.Container{
 						{
 							Name:    "manager",
-							Image:   data.Bootstrap.Spec.Components.Operator.ManagerImage,
+							Image:   data.Bootstrap.Spec.ClusterAPI.Components.Operator.ManagerImage,
 							Command: []string{"/manager"},
 							Args:    []string{"--metrics-bind-addr", "127.0.0.1:8080", "--leader-elect"},
 							Ports: []corev1.ContainerPort{
@@ -84,7 +84,7 @@ func DeploymentCreator(data *resources.TemplateData) reconciling.NamedDeployment
 						},
 						{
 							Name:  "kube-rbac-proxy",
-							Image: data.Bootstrap.Spec.Components.Operator.KubeRBACProxyImage,
+							Image: data.Bootstrap.Spec.ClusterAPI.Components.Operator.KubeRBACProxyImage,
 							Args:  []string{"--secure-listen-address", "0.0.0.0:8443", "--upstream", "http://127.0.0.1:8080/", "--logtostderr", "true", "--v", "10"},
 							Ports: []corev1.ContainerPort{
 								{
