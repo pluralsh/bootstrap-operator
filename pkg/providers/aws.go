@@ -2,27 +2,28 @@ package providers
 
 import (
 	"fmt"
+	"github.com/aws/smithy-go/transport/http"
 	"os"
 	"strings"
 	"time"
 
-	"sigs.k8s.io/cluster-api-provider-aws/v2/cmd/clusterawsadm/cloudformation/bootstrap"
-
-	"github.com/aws/aws-sdk-go/aws/credentials"
-
-	"github.com/pluralsh/bootstrap-operator/apis/bootstrap/helper"
-	bv1alpha1 "github.com/pluralsh/bootstrap-operator/apis/bootstrap/v1alpha1"
-
-	ctrl "sigs.k8s.io/controller-runtime"
-
+	awseks "github.com/aws/aws-sdk-go-v2/service/eks"
 	awsv1 "github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
 	cfn "github.com/aws/aws-sdk-go/service/cloudformation"
+	"github.com/pkg/errors"
+	"github.com/pluralsh/bootstrap-operator/apis/bootstrap/helper"
+	bv1alpha1 "github.com/pluralsh/bootstrap-operator/apis/bootstrap/v1alpha1"
 	"github.com/pluralsh/bootstrap-operator/pkg/resources"
 	"github.com/pluralsh/bootstrap-operator/pkg/resources/reconciling"
+	"github.com/weaveworks/eksctl/pkg/actions/addon"
+	api "github.com/weaveworks/eksctl/pkg/apis/eksctl.io/v1alpha5"
+	"github.com/weaveworks/eksctl/pkg/ctl/cmdutils"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	awsinfrastructure "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
+	"sigs.k8s.io/cluster-api-provider-aws/v2/cmd/clusterawsadm/cloudformation/bootstrap"
 	cloudformation "sigs.k8s.io/cluster-api-provider-aws/v2/cmd/clusterawsadm/cloudformation/service"
 	creds "sigs.k8s.io/cluster-api-provider-aws/v2/cmd/clusterawsadm/credentials"
 	awscontrolplane "sigs.k8s.io/cluster-api-provider-aws/v2/controlplane/eks/api/v1beta2"
@@ -30,6 +31,7 @@ import (
 	clusterapi "sigs.k8s.io/cluster-api/api/v1beta1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	clusterapiexp "sigs.k8s.io/cluster-api/exp/api/v1beta1"
+	ctrl "sigs.k8s.io/controller-runtime"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -95,6 +97,7 @@ func (aws *AWSProvider) createCredentialSecret() error {
 			Name:      awsSecretName,
 		},
 		Data: map[string][]byte{
+			"CAPA_EKS_ADD_ROLES":         []byte("true"),
 			"CAPA_EKS_IAM":               []byte("true"),
 			"AWS_REGION":                 []byte(aws.Region),
 			"EXP_MACHINE_POOL":           []byte("true"),
@@ -158,6 +161,9 @@ func (aws *AWSProvider) CheckCluster() (*ctrl.Result, error) {
 	}
 	for _, cond := range cluster.Status.Conditions {
 		if cond.Type == clusterv1.ReadyCondition && cond.Status == corev1.ConditionTrue {
+			if err := aws.installEBS(); err != nil {
+				return nil, err
+			}
 			return nil, aws.setStatusReady()
 		}
 	}
@@ -313,6 +319,7 @@ func awsManageControlPlaneCreator(data *resources.TemplateData) reconciling.Name
 				SSHKeyName:     resources.StrPtr("default"),
 				Version:        resources.StrPtr(data.Bootstrap.Spec.KubernetesVersion),
 			}
+			c.Spec.AssociateOIDCProvider = true
 
 			return c, nil
 		}
@@ -352,6 +359,7 @@ func awsAWSManagedMachinePoolCreator(data *resources.TemplateData) reconciling.N
 		return fmt.Sprintf("%s-%s", data.Bootstrap.Spec.ClusterName, "pool-0"), func(c *awsmachinepool.AWSManagedMachinePool) (*awsmachinepool.AWSManagedMachinePool, error) {
 			c.Name = fmt.Sprintf("%s-%s", data.Bootstrap.Spec.ClusterName, "pool-0")
 			c.Namespace = data.Namespace
+
 			c.Spec = awsmachinepool.AWSManagedMachinePoolSpec{
 				InstanceType: resources.StrPtr(data.Bootstrap.Spec.CloudSpec.AWS.InstanceType),
 			}
@@ -359,4 +367,72 @@ func awsAWSManagedMachinePoolCreator(data *resources.TemplateData) reconciling.N
 			return c, nil
 		}
 	}
+}
+
+func (aws *AWSProvider) installEBS() error {
+	os.Setenv("AWS_ACCESS_KEY_ID", aws.AccessKeyID)
+	os.Setenv("AWS_SECRET_ACCESS_KEY", aws.SecretAccessKey)
+	os.Setenv("AWS_SESSION_TOKEN", aws.SessionToken)
+	os.Setenv("AWS_REGION", aws.Region)
+
+	cmd := &cmdutils.Cmd{}
+	cmd.ClusterConfig = api.NewClusterConfig()
+	cmd.ClusterConfig.Metadata.Name = aws.Data.Bootstrap.Spec.ClusterName
+	cmd.ClusterConfig.Metadata.Region = aws.Region
+	cmd.ClusterConfig.Addons = []*api.Addon{
+		{
+			Name: "aws-ebs-csi-driver",
+		},
+	}
+
+	ctx := aws.Data.Ctx
+	clusterProvider, err := cmd.NewProviderForExistingCluster(ctx)
+	if err != nil {
+		return err
+	}
+
+	oidc, err := clusterProvider.NewOpenIDConnectManager(ctx, cmd.ClusterConfig)
+	if err != nil {
+		return err
+	}
+
+	oidcProviderExists, err := oidc.CheckProviderExists(ctx)
+	if err != nil {
+		return err
+	}
+
+	stackManager := clusterProvider.NewStackManager(cmd.ClusterConfig)
+
+	output, err := clusterProvider.AWSProvider.EKS().DescribeCluster(ctx, &awseks.DescribeClusterInput{
+		Name: &cmd.ClusterConfig.Metadata.Name,
+	})
+
+	if err != nil {
+		return fmt.Errorf("failed to fetch cluster %q version: %v", cmd.ClusterConfig.Metadata.Name, err)
+	}
+
+	cmd.ClusterConfig.Metadata.Version = *output.Cluster.Version
+
+	clientSet, err := clusterProvider.NewStdClientSet(cmd.ClusterConfig)
+	if err != nil {
+		return err
+	}
+
+	addonManager, err := addon.New(cmd.ClusterConfig, clusterProvider.AWSProvider.EKS(), stackManager, oidcProviderExists, oidc, clientSet)
+	if err != nil {
+		return err
+	}
+
+	for _, a := range cmd.ClusterConfig.Addons {
+		if err := addonManager.Create(ctx, a, cmd.ProviderConfig.WaitTimeout); err != nil {
+			var respErr *http.ResponseError
+			if errors.As(err, &respErr) {
+				if strings.Contains(respErr.Unwrap().Error(), "already exists") {
+					return nil
+				}
+			}
+			return err
+		}
+	}
+	return nil
 }
