@@ -6,6 +6,8 @@ import (
 	"strings"
 	"time"
 
+	"sigs.k8s.io/yaml"
+
 	"github.com/weaveworks/eksctl/pkg/actions/irsa"
 	api "github.com/weaveworks/eksctl/pkg/apis/eksctl.io/v1alpha5"
 	"github.com/weaveworks/eksctl/pkg/ctl/cmdutils"
@@ -406,12 +408,24 @@ func (aws *AWSProvider) postInstall() error {
 				EBSCSIController:          sa.WellKnownPolicies.EBSCSIController,
 				EFSCSIController:          sa.WellKnownPolicies.EFSCSIController,
 			},
+			RoleOnly:            api.Enabled(),
 			AttachRoleARN:       sa.AttachRoleARN,
 			PermissionsBoundary: sa.PermissionsBoundary,
 			RoleName:            sa.RoleName,
-			RoleOnly:            &sa.RoleOnly,
 			Tags:                sa.Tags,
 		}
+		if !sa.RoleOnly {
+			serviceAccount.RoleOnly = api.Disabled()
+		}
+
+		if sa.AttachPolicy != "" {
+			var attachPolicy map[string]interface{}
+			if err := yaml.Unmarshal([]byte(sa.AttachPolicy), &attachPolicy); err != nil {
+				return err
+			}
+			serviceAccount.AttachPolicy = attachPolicy
+		}
+
 		cfg.IAM.ServiceAccounts = append(cfg.IAM.ServiceAccounts, serviceAccount)
 	}
 
@@ -453,7 +467,9 @@ func (aws *AWSProvider) postInstall() error {
 
 	filteredServiceAccounts := saFilter.FilterMatching(cfg.IAM.ServiceAccounts)
 	saFilter.LogInfo(cfg.IAM.ServiceAccounts)
-
+	if filteredServiceAccounts == nil {
+		return nil
+	}
 	if err := irsa.New(cfg.Metadata.Name, stackManager, oidc, clientSet).CreateIAMServiceAccount(filteredServiceAccounts, cmd.Plan); err != nil {
 		return err
 	}
