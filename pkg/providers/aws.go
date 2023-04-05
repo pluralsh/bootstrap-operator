@@ -2,24 +2,23 @@ package providers
 
 import (
 	"fmt"
-	"github.com/aws/smithy-go/transport/http"
 	"os"
 	"strings"
 	"time"
 
-	awseks "github.com/aws/aws-sdk-go-v2/service/eks"
+	"github.com/weaveworks/eksctl/pkg/actions/irsa"
+	api "github.com/weaveworks/eksctl/pkg/apis/eksctl.io/v1alpha5"
+	"github.com/weaveworks/eksctl/pkg/ctl/cmdutils"
+	"github.com/weaveworks/eksctl/pkg/ctl/cmdutils/filter"
+
 	awsv1 "github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
 	cfn "github.com/aws/aws-sdk-go/service/cloudformation"
-	"github.com/pkg/errors"
 	"github.com/pluralsh/bootstrap-operator/apis/bootstrap/helper"
 	bv1alpha1 "github.com/pluralsh/bootstrap-operator/apis/bootstrap/v1alpha1"
 	"github.com/pluralsh/bootstrap-operator/pkg/resources"
 	"github.com/pluralsh/bootstrap-operator/pkg/resources/reconciling"
-	"github.com/weaveworks/eksctl/pkg/actions/addon"
-	api "github.com/weaveworks/eksctl/pkg/apis/eksctl.io/v1alpha5"
-	"github.com/weaveworks/eksctl/pkg/ctl/cmdutils"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	awsinfrastructure "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
@@ -161,7 +160,7 @@ func (aws *AWSProvider) CheckCluster() (*ctrl.Result, error) {
 	}
 	for _, cond := range cluster.Status.Conditions {
 		if cond.Type == clusterv1.ReadyCondition && cond.Status == corev1.ConditionTrue {
-			if err := aws.installEBS(); err != nil {
+			if err := aws.postInstall(); err != nil {
 				return nil, err
 			}
 			return nil, aws.setStatusReady()
@@ -369,70 +368,95 @@ func awsAWSManagedMachinePoolCreator(data *resources.TemplateData) reconciling.N
 	}
 }
 
-func (aws *AWSProvider) installEBS() error {
+func (aws *AWSProvider) postInstall() error {
 	os.Setenv("AWS_ACCESS_KEY_ID", aws.AccessKeyID)
 	os.Setenv("AWS_SECRET_ACCESS_KEY", aws.SecretAccessKey)
 	os.Setenv("AWS_SESSION_TOKEN", aws.SessionToken)
 	os.Setenv("AWS_REGION", aws.Region)
 
+	if len(aws.Data.Bootstrap.Spec.CloudSpec.AWS.ServiceAccounts) == 0 {
+		return nil
+	}
+
+	aws.Data.Log.Info("Installing SA ...")
 	cmd := &cmdutils.Cmd{}
-	cmd.ClusterConfig = api.NewClusterConfig()
+	cfg := api.NewClusterConfig()
+	cmd.ClusterConfig = cfg
 	cmd.ClusterConfig.Metadata.Name = aws.Data.Bootstrap.Spec.ClusterName
 	cmd.ClusterConfig.Metadata.Region = aws.Region
-	cmd.ClusterConfig.Addons = []*api.Addon{
-		{
-			Name: "aws-ebs-csi-driver",
-		},
+	cmd.ProviderConfig.WaitTimeout = time.Minute * 5
+
+	cfg.IAM.WithOIDC = api.Enabled()
+
+	for _, sa := range aws.Data.Bootstrap.Spec.CloudSpec.AWS.ServiceAccounts {
+		serviceAccount := &api.ClusterIAMServiceAccount{
+			ClusterIAMMeta: api.ClusterIAMMeta{
+				Name:        sa.Name,
+				Namespace:   sa.Namespace,
+				Labels:      sa.Labels,
+				Annotations: sa.Annotations,
+			},
+			AttachPolicyARNs: sa.AttachPolicyARNs,
+			WellKnownPolicies: api.WellKnownPolicies{
+				ImageBuilder:              sa.WellKnownPolicies.ImageBuilder,
+				AutoScaler:                sa.WellKnownPolicies.AutoScaler,
+				AWSLoadBalancerController: sa.WellKnownPolicies.AWSLoadBalancerController,
+				ExternalDNS:               sa.WellKnownPolicies.ExternalDNS,
+				CertManager:               sa.WellKnownPolicies.CertManager,
+				EBSCSIController:          sa.WellKnownPolicies.EBSCSIController,
+				EFSCSIController:          sa.WellKnownPolicies.EFSCSIController,
+			},
+			AttachRoleARN:       sa.AttachRoleARN,
+			PermissionsBoundary: sa.PermissionsBoundary,
+			RoleName:            sa.RoleName,
+			RoleOnly:            &sa.RoleOnly,
+			Tags:                sa.Tags,
+		}
+		cfg.IAM.ServiceAccounts = append(cfg.IAM.ServiceAccounts, serviceAccount)
 	}
+
+	saFilter := filter.NewIAMServiceAccountFilter()
 
 	ctx := aws.Data.Ctx
-	clusterProvider, err := cmd.NewProviderForExistingCluster(ctx)
+	ctl, err := cmd.NewProviderForExistingCluster(ctx)
 	if err != nil {
 		return err
 	}
 
-	oidc, err := clusterProvider.NewOpenIDConnectManager(ctx, cmd.ClusterConfig)
+	if ok, err := ctl.CanOperate(cfg); !ok {
+		return err
+	}
+
+	clientSet, err := ctl.NewStdClientSet(cfg)
 	if err != nil {
 		return err
 	}
 
-	oidcProviderExists, err := oidc.CheckProviderExists(ctx)
+	oidc, err := ctl.NewOpenIDConnectManager(ctx, cfg)
 	if err != nil {
 		return err
 	}
 
-	stackManager := clusterProvider.NewStackManager(cmd.ClusterConfig)
-
-	output, err := clusterProvider.AWSProvider.EKS().DescribeCluster(ctx, &awseks.DescribeClusterInput{
-		Name: &cmd.ClusterConfig.Metadata.Name,
-	})
-
-	if err != nil {
-		return fmt.Errorf("failed to fetch cluster %q version: %v", cmd.ClusterConfig.Metadata.Name, err)
-	}
-
-	cmd.ClusterConfig.Metadata.Version = *output.Cluster.Version
-
-	clientSet, err := clusterProvider.NewStdClientSet(cmd.ClusterConfig)
+	providerExists, err := oidc.CheckProviderExists(ctx)
 	if err != nil {
 		return err
 	}
 
-	addonManager, err := addon.New(cmd.ClusterConfig, clusterProvider.AWSProvider.EKS(), stackManager, oidcProviderExists, oidc, clientSet)
-	if err != nil {
+	if !providerExists {
+		return fmt.Errorf("unable to create iamserviceaccount(s) without IAM OIDC provider enabled")
+	}
+	stackManager := ctl.NewStackManager(cfg)
+
+	if err := saFilter.SetExcludeExistingFilter(ctx, stackManager, clientSet, cfg.IAM.ServiceAccounts, true); err != nil {
 		return err
 	}
 
-	for _, a := range cmd.ClusterConfig.Addons {
-		if err := addonManager.Create(ctx, a, cmd.ProviderConfig.WaitTimeout); err != nil {
-			var respErr *http.ResponseError
-			if errors.As(err, &respErr) {
-				if strings.Contains(respErr.Unwrap().Error(), "already exists") {
-					return nil
-				}
-			}
-			return err
-		}
+	filteredServiceAccounts := saFilter.FilterMatching(cfg.IAM.ServiceAccounts)
+	saFilter.LogInfo(cfg.IAM.ServiceAccounts)
+
+	if err := irsa.New(cfg.Metadata.Name, stackManager, oidc, clientSet).CreateIAMServiceAccount(filteredServiceAccounts, cmd.Plan); err != nil {
+		return err
 	}
+
 	return nil
 }
