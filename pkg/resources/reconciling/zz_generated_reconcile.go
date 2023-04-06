@@ -18,6 +18,7 @@ import (
 	awsinfrastructure "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 	awscontrolplane "sigs.k8s.io/cluster-api-provider-aws/v2/controlplane/eks/api/v1beta2"
 	awsmachinepool "sigs.k8s.io/cluster-api-provider-aws/v2/exp/api/v1beta2"
+	gcpmanagedcluster "sigs.k8s.io/cluster-api-provider-gcp/exp/api/v1beta1"
 	clusterapi "sigs.k8s.io/cluster-api/api/v1beta1"
 	clusterapiexp "sigs.k8s.io/cluster-api/exp/api/v1beta1"
 )
@@ -831,6 +832,117 @@ func ReconcileAWSManagedControlPlanes(ctx context.Context, namedGetters []NamedA
 
 		if err := EnsureNamedObject(ctx, types.NamespacedName{Namespace: namespace, Name: name}, createObject, client, &awscontrolplane.AWSManagedControlPlane{}, false); err != nil {
 			return fmt.Errorf("failed to ensure AWSManagedControlPlane %s/%s: %w", namespace, name, err)
+		}
+	}
+
+	return nil
+}
+
+// GCPManagedClusterCreator defines an interface to create/update GCPManagedClusters
+type GCPManagedClusterCreator = func(existing *gcpmanagedcluster.GCPManagedCluster) (*gcpmanagedcluster.GCPManagedCluster, error)
+
+// NamedGCPManagedClusterCreatorGetter returns the name of the resource and the corresponding creator function
+type NamedGCPManagedClusterCreatorGetter = func() (name string, create GCPManagedClusterCreator)
+
+// GCPManagedClusterObjectWrapper adds a wrapper so the GCPManagedClusterCreator matches ObjectCreator.
+// This is needed as Go does not support function interface matching.
+func GCPManagedClusterObjectWrapper(create GCPManagedClusterCreator) ObjectCreator {
+	return func(existing ctrlruntimeclient.Object) (ctrlruntimeclient.Object, error) {
+		if existing != nil {
+			return create(existing.(*gcpmanagedcluster.GCPManagedCluster))
+		}
+		return create(&gcpmanagedcluster.GCPManagedCluster{})
+	}
+}
+
+// ReconcileGCPManagedClusters will create and update the GCPManagedClusters coming from the passed GCPManagedClusterCreator slice
+func ReconcileGCPManagedClusters(ctx context.Context, namedGetters []NamedGCPManagedClusterCreatorGetter, namespace string, client ctrlruntimeclient.Client, objectModifiers ...ObjectModifier) error {
+	for _, get := range namedGetters {
+		name, create := get()
+		createObject := GCPManagedClusterObjectWrapper(create)
+		createObject = createWithNamespace(createObject, namespace)
+		createObject = createWithName(createObject, name)
+
+		for _, objectModifier := range objectModifiers {
+			createObject = objectModifier(createObject)
+		}
+
+		if err := EnsureNamedObject(ctx, types.NamespacedName{Namespace: namespace, Name: name}, createObject, client, &gcpmanagedcluster.GCPManagedCluster{}, false); err != nil {
+			return fmt.Errorf("failed to ensure GCPManagedCluster %s/%s: %w", namespace, name, err)
+		}
+	}
+
+	return nil
+}
+
+// GCPManagedControlPlaneCreator defines an interface to create/update GCPManagedControlPlanes
+type GCPManagedControlPlaneCreator = func(existing *gcpmanagedcluster.GCPManagedControlPlane) (*gcpmanagedcluster.GCPManagedControlPlane, error)
+
+// NamedGCPManagedControlPlaneCreatorGetter returns the name of the resource and the corresponding creator function
+type NamedGCPManagedControlPlaneCreatorGetter = func() (name string, create GCPManagedControlPlaneCreator)
+
+// GCPManagedControlPlaneObjectWrapper adds a wrapper so the GCPManagedControlPlaneCreator matches ObjectCreator.
+// This is needed as Go does not support function interface matching.
+func GCPManagedControlPlaneObjectWrapper(create GCPManagedControlPlaneCreator) ObjectCreator {
+	return func(existing ctrlruntimeclient.Object) (ctrlruntimeclient.Object, error) {
+		if existing != nil {
+			return create(existing.(*gcpmanagedcluster.GCPManagedControlPlane))
+		}
+		return create(&gcpmanagedcluster.GCPManagedControlPlane{})
+	}
+}
+
+// ReconcileGCPManagedControlPlanes will create and update the GCPManagedControlPlanes coming from the passed GCPManagedControlPlaneCreator slice
+func ReconcileGCPManagedControlPlanes(ctx context.Context, namedGetters []NamedGCPManagedControlPlaneCreatorGetter, namespace string, client ctrlruntimeclient.Client, objectModifiers ...ObjectModifier) error {
+	for _, get := range namedGetters {
+		name, create := get()
+		createObject := GCPManagedControlPlaneObjectWrapper(create)
+		createObject = createWithNamespace(createObject, namespace)
+		createObject = createWithName(createObject, name)
+
+		for _, objectModifier := range objectModifiers {
+			createObject = objectModifier(createObject)
+		}
+
+		if err := EnsureNamedObject(ctx, types.NamespacedName{Namespace: namespace, Name: name}, createObject, client, &gcpmanagedcluster.GCPManagedControlPlane{}, false); err != nil {
+			return fmt.Errorf("failed to ensure GCPManagedControlPlane %s/%s: %w", namespace, name, err)
+		}
+	}
+
+	return nil
+}
+
+// GCPManagedMachinePoolCreator defines an interface to create/update GCPManagedMachinePools
+type GCPManagedMachinePoolCreator = func(existing *gcpmanagedcluster.GCPManagedMachinePool) (*gcpmanagedcluster.GCPManagedMachinePool, error)
+
+// NamedGCPManagedMachinePoolCreatorGetter returns the name of the resource and the corresponding creator function
+type NamedGCPManagedMachinePoolCreatorGetter = func() (name string, create GCPManagedMachinePoolCreator)
+
+// GCPManagedMachinePoolObjectWrapper adds a wrapper so the GCPManagedMachinePoolCreator matches ObjectCreator.
+// This is needed as Go does not support function interface matching.
+func GCPManagedMachinePoolObjectWrapper(create GCPManagedMachinePoolCreator) ObjectCreator {
+	return func(existing ctrlruntimeclient.Object) (ctrlruntimeclient.Object, error) {
+		if existing != nil {
+			return create(existing.(*gcpmanagedcluster.GCPManagedMachinePool))
+		}
+		return create(&gcpmanagedcluster.GCPManagedMachinePool{})
+	}
+}
+
+// ReconcileGCPManagedMachinePools will create and update the GCPManagedMachinePools coming from the passed GCPManagedMachinePoolCreator slice
+func ReconcileGCPManagedMachinePools(ctx context.Context, namedGetters []NamedGCPManagedMachinePoolCreatorGetter, namespace string, client ctrlruntimeclient.Client, objectModifiers ...ObjectModifier) error {
+	for _, get := range namedGetters {
+		name, create := get()
+		createObject := GCPManagedMachinePoolObjectWrapper(create)
+		createObject = createWithNamespace(createObject, namespace)
+		createObject = createWithName(createObject, name)
+
+		for _, objectModifier := range objectModifiers {
+			createObject = objectModifier(createObject)
+		}
+
+		if err := EnsureNamedObject(ctx, types.NamespacedName{Namespace: namespace, Name: name}, createObject, client, &gcpmanagedcluster.GCPManagedMachinePool{}, false); err != nil {
+			return fmt.Errorf("failed to ensure GCPManagedMachinePool %s/%s: %w", namespace, name, err)
 		}
 	}
 
