@@ -320,6 +320,16 @@ func awsManageControlPlaneCreator(data *resources.TemplateData) reconciling.Name
 				SSHKeyName:     resources.StrPtr("default"),
 				Version:        resources.StrPtr(data.Bootstrap.Spec.KubernetesVersion),
 			}
+			c.Spec.Addons = &[]awscontrolplane.Addon{}
+
+			for _, addon := range data.Bootstrap.Spec.CloudSpec.AWS.Addons {
+				newAddon := awscontrolplane.Addon{
+					Name:                  addon.Name,
+					Version:               addon.Version,
+					ServiceAccountRoleArn: addon.ServiceAccountRoleArn,
+				}
+				*c.Spec.Addons = append(*c.Spec.Addons, newAddon)
+			}
 			c.Spec.AssociateOIDCProvider = true
 
 			return c, nil
@@ -468,7 +478,11 @@ func (aws *AWSProvider) postInstall() error {
 	filteredServiceAccounts := saFilter.FilterMatching(cfg.IAM.ServiceAccounts)
 	saFilter.LogInfo(cfg.IAM.ServiceAccounts)
 	if filteredServiceAccounts == nil {
-		return nil
+		existingIAMStacks, err := stackManager.ListStacksMatching(ctx, "eksctl-.*-addon-iamserviceaccount")
+		if err != nil {
+			return err
+		}
+		return irsa.New(cfg.Metadata.Name, stackManager, oidc, clientSet).UpdateIAMServiceAccounts(ctx, cfg.IAM.ServiceAccounts, existingIAMStacks, cmd.Plan)
 	}
 	if err := irsa.New(cfg.Metadata.Name, stackManager, oidc, clientSet).CreateIAMServiceAccount(filteredServiceAccounts, cmd.Plan); err != nil {
 		return err
