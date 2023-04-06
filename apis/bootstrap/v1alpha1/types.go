@@ -1,8 +1,9 @@
 package v1alpha1
 
 import (
-	api "github.com/weaveworks/eksctl/pkg/apis/eksctl.io/v1alpha5"
 	"strings"
+
+	api "github.com/weaveworks/eksctl/pkg/apis/eksctl.io/v1alpha5"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -96,10 +97,25 @@ type AWSCloudSpec struct {
 	ClusterAPIComponentSpec `json:",inline"`
 	// ServiceAccounts specifies service accounts
 	// +optional
-	ServiceAccounts    []ClusterIAMServiceAccount `json:"serviceAccounts,omitempty"`
-	AccessKeyIDRef     corev1.SecretKeySelector   `json:"accessKeyIdRef"`
-	SecretAccessKeyRef corev1.SecretKeySelector   `json:"secretAccessKeyRef"`
-	SessionTokenRef    corev1.SecretKeySelector   `json:"sessionTokenRef"`
+	ServiceAccounts []ClusterIAMServiceAccount `json:"serviceAccounts,omitempty"`
+	// +optional
+	Addons             []Addon                  `json:"addons,omitempty"`
+	AccessKeyIDRef     corev1.SecretKeySelector `json:"accessKeyIdRef"`
+	SecretAccessKeyRef corev1.SecretKeySelector `json:"secretAccessKeyRef"`
+	SessionTokenRef    corev1.SecretKeySelector `json:"sessionTokenRef"`
+}
+
+// Addon represents a EKS addon.
+type Addon struct {
+	// Name is the name of the addon
+	// +kubebuilder:validation:MinLength:=2
+	// +kubebuilder:validation:Required
+	Name string `json:"name"`
+	// Version is the version of the addon to use
+	Version string `json:"version"`
+	// ServiceAccountRoleArn is the ARN of an IAM role to bind to the addons service account
+	// +optional
+	ServiceAccountRoleArn *string `json:"serviceAccountRoleARN,omitempty"`
 }
 
 type ClusterIAMServiceAccount struct {

@@ -2,7 +2,7 @@ apiVersion: bootstrap.plural.sh/v1alpha1
 kind: Bootstrap
 metadata:
   name: test-aws
-  namespace: cert-manager
+  namespace: bootstrap
 spec:
   clusterName: test-aws
   kubernetesVersion: v1.22.9
