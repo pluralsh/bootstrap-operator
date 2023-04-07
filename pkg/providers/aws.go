@@ -78,11 +78,7 @@ func (aws *AWSProvider) createCredentialSecret() error {
 		return err
 	}
 	cfnSvc := cloudformation.NewService(cfn.New(sess))
-	err = cfnSvc.ReconcileBootstrapStack(t.Spec.StackName, *t.RenderCloudFormation(), t.Spec.StackTags)
-	if err != nil {
-		return err
-	}
-
+	cfnSvc.ReconcileBootstrapStack(t.Spec.StackName, *t.RenderCloudFormation(), t.Spec.StackTags)
 	awsCreds, err := creds.NewAWSCredentialFromDefaultChain(aws.Region)
 	if err != nil {
 		return err
