@@ -13,7 +13,7 @@ require (
 	k8s.io/apiextensions-apiserver v0.26.0
 	k8s.io/apimachinery v0.26.0
 	k8s.io/client-go v0.26.0
-	k8s.io/utils v0.0.0-20221107191617-1a15be271d1d
+	k8s.io/utils v0.0.0-20230406110748-d93618cff8a2
 	sigs.k8s.io/cluster-api v1.3.5
 	sigs.k8s.io/cluster-api-operator v0.1.0
 	sigs.k8s.io/cluster-api-provider-aws/v2 v2.0.2
