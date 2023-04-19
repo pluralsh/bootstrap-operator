@@ -15,11 +15,14 @@ func init() {
 }
 
 type BootstrapSpec struct {
-	ClusterName       string         `json:"clusterName"`
-	KubernetesVersion string         `json:"kubernetesVersion"`
-	ClusterNetwork    ClusterNetwork `json:"clusterNetwork"`
-	ClusterAPI        ClusterAPI     `json:"clusterAPI"`
-	CloudSpec         CloudSpec      `json:"cloudSpec"`
+	ClusterName       string `json:"clusterName"`
+	KubernetesVersion string `json:"kubernetesVersion"`
+	// +kubebuilder:default:=false
+	// +optional
+	SkipClusterCreation bool           `json:"skipClusterCreation"`
+	ClusterNetwork      ClusterNetwork `json:"clusterNetwork"`
+	ClusterAPI          ClusterAPI     `json:"clusterAPI"`
+	CloudSpec           CloudSpec      `json:"cloudSpec"`
 }
 
 // ClusterNetwork specifies the different networking

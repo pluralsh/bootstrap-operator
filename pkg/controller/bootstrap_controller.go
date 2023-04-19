@@ -113,34 +113,36 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		}
 	}
 
-	if !bootstrap.Status.CapiClusterStatus.Ready {
-		res, err := r.reconcileCluster(ctx, bootstrap)
-		if err != nil {
-			updateErr := r.updateStatus(ctx, bootstrap, bv1alpha1.Error, err.Error(), false)
+	if !bootstrap.Spec.SkipClusterCreation {
+		if !bootstrap.Status.CapiClusterStatus.Ready {
+			res, err := r.reconcileCluster(ctx, bootstrap)
+			if err != nil {
+				updateErr := r.updateStatus(ctx, bootstrap, bv1alpha1.Error, err.Error(), false)
+				if updateErr != nil {
+					return ctrl.Result{}, fmt.Errorf("failed to set the bootstrap error: %w", updateErr)
+				}
+				return ctrl.Result{}, fmt.Errorf("failed to reconcile CAPI cluster: %w", err)
+			}
+			updateErr := r.updateStatus(ctx, bootstrap, bv1alpha1.Creating, "Creating cluster", false)
 			if updateErr != nil {
 				return ctrl.Result{}, fmt.Errorf("failed to set the bootstrap error: %w", updateErr)
 			}
-			return ctrl.Result{}, fmt.Errorf("failed to reconcile CAPI cluster: %w", err)
+			if res != nil {
+				return *res, nil
+			}
 		}
-		updateErr := r.updateStatus(ctx, bootstrap, bv1alpha1.Creating, "Creating cluster", false)
-		if updateErr != nil {
-			return ctrl.Result{}, fmt.Errorf("failed to set the bootstrap error: %w", updateErr)
-		}
-		if res != nil {
-			return *res, nil
-		}
-	}
 
-	if !bootstrap.Status.Ready {
-		if err := r.moveNamespace(ctx, bootstrap); err != nil {
-			updateErr := r.updateStatus(ctx, bootstrap, bv1alpha1.Error, err.Error(), false)
-			if updateErr != nil {
-				return ctrl.Result{}, fmt.Errorf("failed to set the bootstrap error: %w", updateErr)
+		if !bootstrap.Status.Ready {
+			if err := r.moveNamespace(ctx, bootstrap); err != nil {
+				updateErr := r.updateStatus(ctx, bootstrap, bv1alpha1.Error, err.Error(), false)
+				if updateErr != nil {
+					return ctrl.Result{}, fmt.Errorf("failed to set the bootstrap error: %w", updateErr)
+				}
+				return ctrl.Result{}, fmt.Errorf("failed to move CAPI objects: %w", err)
 			}
-			return ctrl.Result{}, fmt.Errorf("failed to move CAPI objects: %w", err)
-		}
-		if err := r.updateStatus(ctx, bootstrap, bv1alpha1.Running, "Cluster created successfully", true); err != nil {
-			return ctrl.Result{}, err
+			if err := r.updateStatus(ctx, bootstrap, bv1alpha1.Running, "Cluster created successfully", true); err != nil {
+				return ctrl.Result{}, err
+			}
 		}
 	}
 
