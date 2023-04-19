@@ -218,6 +218,8 @@ github.com/census-instrumentation/opencensus-proto v0.3.0 h1:t/LhUZLVitR1Ow2YOnd
 github.com/census-instrumentation/opencensus-proto v0.3.0/go.mod h1:f6KPmirojxKA12rnyqOA5BBL4O983OfeGPqjHWSTneU=
 github.com/cert-manager/cert-manager v1.10.0 h1:qWMM2nqt3pyCVKTWoS645PORJpK5XvtE0iImk9qTPsc=
 github.com/cert-manager/cert-manager v1.10.0/go.mod h1:xKakpUDYRHgUry/DkvcCCgQDRSwVSeSXTlw7slT+AYo=
+github.com/cert-manager/cert-manager v1.10.2 h1:2/QH9C8ffeB+t8xHYsITkY2d9ulye9a5mi1F7o+MmC0=
+github.com/cert-manager/cert-manager v1.10.2/go.mod h1:v3T3yAt5ASv4/9cbO42EilLsoZDlybQrh8o6RhTw/vo=
 github.com/certifi/gocertifi v0.0.0-20191021191039-0944d244cd40/go.mod h1:sGbDF6GwGcLpkNXPUTkMRoywsNa/ol15pxFe6ERfguA=
 github.com/certifi/gocertifi v0.0.0-20200922220541-2c3bb06c6054/go.mod h1:sGbDF6GwGcLpkNXPUTkMRoywsNa/ol15pxFe6ERfguA=
 github.com/certifi/gocertifi v0.0.0-20210507211836-431795d63e8d h1:S2NE3iHSwP0XV47EEXL8mWmRdEfGscSJ+7EgePNgt0s=
