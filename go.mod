@@ -5,10 +5,7 @@ go 1.19
 require (
 	github.com/Masterminds/sprig/v3 v3.2.3
 	github.com/aws/aws-sdk-go v1.44.225
-	github.com/aws/aws-sdk-go-v2/service/eks v1.27.8
-	github.com/aws/smithy-go v1.13.5
 	github.com/cert-manager/cert-manager v1.10.0
-	github.com/pkg/errors v0.9.1
 	github.com/spf13/pflag v1.0.5
 	github.com/weaveworks/eksctl v0.136.0
 	go.uber.org/zap v1.24.0
@@ -21,6 +18,7 @@ require (
 	sigs.k8s.io/cluster-api-operator v0.1.0
 	sigs.k8s.io/cluster-api-provider-aws/v2 v2.0.2
 	sigs.k8s.io/controller-runtime v0.13.1
+	sigs.k8s.io/yaml v1.3.0
 )
 
 require (
@@ -47,6 +45,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/cloudtrail v1.24.3 // indirect
 	github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs v1.20.6 // indirect
 	github.com/aws/aws-sdk-go-v2/service/ec2 v1.90.0 // indirect
+	github.com/aws/aws-sdk-go-v2/service/eks v1.27.8 // indirect
 	github.com/aws/aws-sdk-go-v2/service/elasticloadbalancing v1.15.5 // indirect
 	github.com/aws/aws-sdk-go-v2/service/elasticloadbalancingv2 v1.19.6 // indirect
 	github.com/aws/aws-sdk-go-v2/service/iam v1.19.6 // indirect
@@ -56,6 +55,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/sso v1.12.5 // indirect
 	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.14.5 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sts v1.18.6 // indirect
+	github.com/aws/smithy-go v1.13.5 // indirect
 	github.com/awslabs/goformation/v4 v4.19.5 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/bgentry/speakeasy v0.1.0 // indirect
@@ -154,6 +154,7 @@ require (
 	github.com/patrickmn/go-cache v2.1.0+incompatible // indirect
 	github.com/pelletier/go-toml v1.9.5 // indirect
 	github.com/pelletier/go-toml/v2 v2.0.5 // indirect
+	github.com/pkg/errors v0.9.1 // indirect
 	github.com/prometheus/client_golang v1.14.0 // indirect
 	github.com/prometheus/client_model v0.3.0 // indirect
 	github.com/prometheus/common v0.37.0 // indirect
@@ -238,7 +239,6 @@ require (
 	sigs.k8s.io/kustomize/api v0.12.1 // indirect
 	sigs.k8s.io/kustomize/kyaml v0.13.9 // indirect
 	sigs.k8s.io/structured-merge-diff/v4 v4.2.3 // indirect
-	sigs.k8s.io/yaml v1.3.0 // indirect
 )
 
 // TODO: drop this pin after upgrading kubectl to 0.25
