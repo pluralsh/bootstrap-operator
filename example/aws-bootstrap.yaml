@@ -17,18 +17,5 @@ spec:
         managerImage: registry.k8s.io/capi-operator/cluster-api-operator:v0.1.0
         kubeRBACProxyImage: gcr.io/kubebuilder/kube-rbac-proxy:v0.5.0
   cloudSpec:
-    aws:
-      region: eu-central-1
-      version: v2.0.2
-      machinePoolReplicas: 3
-      instanceType: t2.small
-      accessKeyIdRef:
-        name: aws-variables
-        key: AWS_ACCESS_KEY_ID
-      secretAccessKeyRef:
-        name: aws-variables
-        key: AWS_SECRET_ACCESS_KEY
-      sessionTokenRef:
-        name: aws-variables
-        key: AWS_SESSION_TOKEN
+
 

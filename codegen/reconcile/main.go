@@ -125,6 +125,19 @@ func main() {
 				ResourceImportPath: "sigs.k8s.io/cluster-api-provider-aws/v2/controlplane/eks/api/v1beta2",
 			},
 			{
+				ResourceName:       "GCPManagedCluster",
+				ImportAlias:        "gcpmanagedcluster",
+				ResourceImportPath: "sigs.k8s.io/cluster-api-provider-gcp/exp/api/v1beta1",
+			},
+			{
+				ResourceName: "GCPManagedControlPlane",
+				ImportAlias:  "gcpmanagedcluster",
+			},
+			{
+				ResourceName: "GCPManagedMachinePool",
+				ImportAlias:  "gcpmanagedcluster",
+			},
+			{
 				ResourceName:       "CustomResourceDefinition",
 				ImportAlias:        "apiextensionsv1",
 				ResourceImportPath: "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1",
