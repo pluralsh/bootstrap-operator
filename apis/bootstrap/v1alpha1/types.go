@@ -4,6 +4,8 @@ import (
 	"strings"
 
 	api "github.com/weaveworks/eksctl/pkg/apis/eksctl.io/v1alpha5"
+	gcpexpv1beta1 "sigs.k8s.io/cluster-api-provider-gcp/exp/api/v1beta1"
+	"sigs.k8s.io/cluster-api/exp/api/v1beta1"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -56,7 +58,10 @@ func (n NetworkRanges) String() string {
 }
 
 type ClusterAPIComponents struct {
-	Operator ClusterAPIOperator `json:"operator"`
+	Operator     ClusterAPIOperator      `json:"operator"`
+	Core         *ClusterAPICore         `json:"core,omitempty"`
+	ControlPlane *ClusterAPIControlPlane `json:"controlPlane,omitempty"`
+	Bootstrap    *ClusterAPIBootstrap    `json:"bootstrap,omitempty"`
 }
 
 type ClusterAPI struct {
@@ -88,6 +93,7 @@ type ClusterAPIComponentSpec struct {
 
 type CloudSpec struct {
 	AWS *AWSCloudSpec `json:"aws,omitempty"`
+	GCP *GCPCloudSpec `json:"gcp,omitempty"`
 }
 
 type AWSCloudSpec struct {
@@ -103,6 +109,23 @@ type AWSCloudSpec struct {
 	AccessKeyIDRef     corev1.SecretKeySelector `json:"accessKeyIdRef"`
 	SecretAccessKeyRef corev1.SecretKeySelector `json:"secretAccessKeyRef"`
 	SessionTokenRef    corev1.SecretKeySelector `json:"sessionTokenRef"`
+}
+
+type GCPMachinePoolSpec struct {
+	Replicas int32 `json:"replicas"`
+}
+
+type GCPCloudSpec struct {
+	ManagedCluster          *gcpexpv1beta1.GCPManagedClusterSpec      `json:"managedCluster"`
+	MachinePool             *GCPMachinePoolSpec                       `json:"machinePool"`
+	ControlPlane            *gcpexpv1beta1.GCPManagedControlPlaneSpec `json:"controlPlane"`
+	CredentialsRef          corev1.SecretKeySelector                  `json:"credentialsRef"`
+	ClusterAPIComponentSpec `json:",inline"`
+}
+
+type GCPMachinePool struct {
+	ManagedMachinePool *gcpexpv1beta1.GCPManagedMachinePool `json:"managedMachinePool"`
+	MachinePool        *v1beta1.MachinePool                 `json:"machinePool"`
 }
 
 // Addon represents a EKS addon.
