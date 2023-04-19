@@ -4,9 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	bv1alpha1 "github.com/pluralsh/bootstrap-operator/apis/bootstrap/v1alpha1"
-	"github.com/pluralsh/bootstrap-operator/pkg/move"
-	"github.com/pluralsh/bootstrap-operator/pkg/resources/reconciling"
 	coreapi "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -14,9 +11,14 @@ import (
 	awsinfrastructure "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 	awscontrolplane "sigs.k8s.io/cluster-api-provider-aws/v2/controlplane/eks/api/v1beta2"
 	awsmachinepool "sigs.k8s.io/cluster-api-provider-aws/v2/exp/api/v1beta2"
+	gcpclusterapi "sigs.k8s.io/cluster-api-provider-gcp/exp/api/v1beta1"
 	clusterapi "sigs.k8s.io/cluster-api/api/v1beta1"
 	clusterapiexp "sigs.k8s.io/cluster-api/exp/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	bv1alpha1 "github.com/pluralsh/bootstrap-operator/apis/bootstrap/v1alpha1"
+	"github.com/pluralsh/bootstrap-operator/pkg/move"
+	"github.com/pluralsh/bootstrap-operator/pkg/resources/reconciling"
 )
 
 func (r *Reconciler) moveNamespace(ctx context.Context, bootstrap *bv1alpha1.Bootstrap) error {
@@ -66,7 +68,12 @@ func (r *Reconciler) move(ctx context.Context, bootstrap *bv1alpha1.Bootstrap) e
 		return err
 	}
 
-	allowedGroups := sets.NewString(clusterapi.GroupVersion.Group, awsinfrastructure.GroupVersion.Group, awscontrolplane.GroupVersion.Group, awsmachinepool.GroupVersion.Group, clusterapiexp.GroupVersion.Group)
+	allowedGroups := sets.NewString(clusterapi.GroupVersion.Group,
+		awsinfrastructure.GroupVersion.Group,
+		awscontrolplane.GroupVersion.Group,
+		awsmachinepool.GroupVersion.Group,
+		clusterapiexp.GroupVersion.Group,
+		gcpclusterapi.GroupVersion.Group)
 	var crdCreatorGetter []reconciling.NamedCustomResourceDefinitionCreatorGetter
 	for _, crd := range crdList.Items {
 		if allowedGroups.Has(crd.Spec.Group) {

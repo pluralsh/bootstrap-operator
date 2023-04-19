@@ -17,10 +17,6 @@ import (
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
 	cfn "github.com/aws/aws-sdk-go/service/cloudformation"
-	"github.com/pluralsh/bootstrap-operator/apis/bootstrap/helper"
-	bv1alpha1 "github.com/pluralsh/bootstrap-operator/apis/bootstrap/v1alpha1"
-	"github.com/pluralsh/bootstrap-operator/pkg/resources"
-	"github.com/pluralsh/bootstrap-operator/pkg/resources/reconciling"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	awsinfrastructure "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
@@ -34,6 +30,11 @@ import (
 	clusterapiexp "sigs.k8s.io/cluster-api/exp/api/v1beta1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/pluralsh/bootstrap-operator/apis/bootstrap/helper"
+	bv1alpha1 "github.com/pluralsh/bootstrap-operator/apis/bootstrap/v1alpha1"
+	"github.com/pluralsh/bootstrap-operator/pkg/resources"
+	"github.com/pluralsh/bootstrap-operator/pkg/resources/reconciling"
 )
 
 type AWSProvider struct {
@@ -44,6 +45,7 @@ type AWSProvider struct {
 	Credentials     string
 	Region          string
 	version         string
+	fetchConfigURL  string
 }
 
 const (
@@ -56,6 +58,10 @@ func (aws *AWSProvider) Name() string {
 
 func (aws *AWSProvider) Version() string {
 	return aws.version
+}
+
+func (aws *AWSProvider) FetchConfigURL() string {
+	return aws.fetchConfigURL
 }
 
 func (aws *AWSProvider) createCredentialSecret() error {
@@ -252,6 +258,7 @@ func GetAWSProvider(data *resources.TemplateData) (*AWSProvider, error) {
 		SessionToken:    sessionToken,
 		Region:          spec.Region,
 		version:         spec.Version,
+		fetchConfigURL:  spec.FetchConfigURL,
 	}, nil
 }
 

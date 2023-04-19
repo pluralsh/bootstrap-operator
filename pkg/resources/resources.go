@@ -1,5 +1,7 @@
 package resources
 
+import "sigs.k8s.io/cluster-api/cmd/clusterctl/client/config"
+
 const (
 	ClusterAPIOperatorDeploymentName             = "capi-operator-controller-manager"
 	ClusterAPIOperatorServiceName                = "capi-operator-controller-manager-metrics-service"
@@ -15,9 +17,9 @@ const (
 	ClusterAPIIssuerName                         = "capi-operator-selfsigned-issuer"
 	ClusterAPIValidatingWebhookConfigurationName = "capi-operator-validating-webhook-configuration"
 
-	BootstrapProviderName = "bootstrap"
-	CoreProviderName      = "cluster-api"
-	ControlPlaneName      = "bootstrap-kubeadm"
+	BootstrapProviderName = config.KubeadmBootstrapProviderName
+	CoreProviderName      = config.ClusterAPIProviderName
+	ControlPlaneName      = config.KubeadmControlPlaneProviderName
 
 	CertManagerWebhookSecretName = "capi-operator-webhook-service-cert"
 

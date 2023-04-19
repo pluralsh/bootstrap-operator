@@ -14,16 +14,18 @@ require (
 	k8s.io/apimachinery v0.26.0
 	k8s.io/client-go v0.26.0
 	k8s.io/utils v0.0.0-20221107191617-1a15be271d1d
-	sigs.k8s.io/cluster-api v1.3.1
+	sigs.k8s.io/cluster-api v1.3.5
 	sigs.k8s.io/cluster-api-operator v0.1.0
 	sigs.k8s.io/cluster-api-provider-aws/v2 v2.0.2
+	sigs.k8s.io/cluster-api-provider-gcp v1.3.0
 	sigs.k8s.io/controller-runtime v0.13.1
 	sigs.k8s.io/yaml v1.3.0
 )
 
 require (
-	cloud.google.com/go/compute v1.13.0 // indirect
-	cloud.google.com/go/compute/metadata v0.2.1 // indirect
+	cloud.google.com/go/compute v1.18.0 // indirect
+	cloud.google.com/go/compute/metadata v0.2.3 // indirect
+	cloud.google.com/go/container v1.13.1 // indirect
 	github.com/MakeNowJust/heredoc v1.0.0 // indirect
 	github.com/Masterminds/goutils v1.1.1 // indirect
 	github.com/Masterminds/semver/v3 v3.2.0 // indirect
@@ -62,14 +64,14 @@ require (
 	github.com/blang/semver v3.5.1+incompatible // indirect
 	github.com/blang/semver/v4 v4.0.0 // indirect
 	github.com/cenkalti/backoff/v4 v4.1.3 // indirect
-	github.com/census-instrumentation/opencensus-proto v0.3.0 // indirect
-	github.com/cespare/xxhash/v2 v2.1.2 // indirect
+	github.com/census-instrumentation/opencensus-proto v0.4.1 // indirect
+	github.com/cespare/xxhash/v2 v2.2.0 // indirect
 	github.com/charmbracelet/bubbles v0.13.0 // indirect
 	github.com/charmbracelet/bubbletea v0.21.0 // indirect
 	github.com/charmbracelet/lipgloss v0.5.0 // indirect
 	github.com/cloudflare/cfssl v1.6.3 // indirect
-	github.com/cncf/udpa/go v0.0.0-20210930031921-04548b0d99d4 // indirect
-	github.com/cncf/xds/go v0.0.0-20211216145620-d92e9ce0af51 // indirect
+	github.com/cncf/udpa/go v0.0.0-20220112060539-c52dc94e7fbe // indirect
+	github.com/cncf/xds/go v0.0.0-20230105202645-06c439db220b // indirect
 	github.com/containerd/console v1.0.3 // indirect
 	github.com/coreos/go-semver v0.3.0 // indirect
 	github.com/coreos/go-systemd/v22 v22.3.2 // indirect
@@ -79,8 +81,8 @@ require (
 	github.com/drone/envsubst/v2 v2.0.0-20210730161058-179042472c46 // indirect
 	github.com/dustin/go-humanize v1.0.0 // indirect
 	github.com/emicklei/go-restful/v3 v3.9.0 // indirect
-	github.com/envoyproxy/go-control-plane v0.10.2-0.20220325020618-49ff273808a1 // indirect
-	github.com/envoyproxy/protoc-gen-validate v0.6.2 // indirect
+	github.com/envoyproxy/go-control-plane v0.10.3 // indirect
+	github.com/envoyproxy/protoc-gen-validate v0.9.1 // indirect
 	github.com/evanphx/json-patch v5.6.0+incompatible // indirect
 	github.com/evanphx/json-patch/v5 v5.6.0 // indirect
 	github.com/evertras/bubble-table v0.14.4 // indirect
@@ -115,7 +117,7 @@ require (
 	github.com/grpc-ecosystem/go-grpc-middleware v1.3.0 // indirect
 	github.com/grpc-ecosystem/go-grpc-prometheus v1.2.0 // indirect
 	github.com/grpc-ecosystem/grpc-gateway v1.16.0 // indirect
-	github.com/grpc-ecosystem/grpc-gateway/v2 v2.7.0 // indirect
+	github.com/grpc-ecosystem/grpc-gateway/v2 v2.11.3 // indirect
 	github.com/hashicorp/go-version v1.6.0 // indirect
 	github.com/hashicorp/hcl v1.0.0 // indirect
 	github.com/huandu/xstrings v1.4.0 // indirect
@@ -217,8 +219,8 @@ require (
 	golang.org/x/tools v0.7.0 // indirect
 	gomodules.xyz/jsonpatch/v2 v2.2.0 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
-	google.golang.org/genproto v0.0.0-20230113154510-dbe35b8444a5 // indirect
-	google.golang.org/grpc v1.52.0 // indirect
+	google.golang.org/genproto v0.0.0-20230303212802-e74f57abe488 // indirect
+	google.golang.org/grpc v1.53.0 // indirect
 	google.golang.org/protobuf v1.28.1 // indirect
 	gopkg.in/cheggaaa/pb.v1 v1.0.28 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
