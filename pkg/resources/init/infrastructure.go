@@ -1,14 +1,16 @@
 package initapi
 
 import (
+	"fmt"
 	"time"
+
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	clusterapioperator "sigs.k8s.io/cluster-api-operator/api/v1alpha1"
+	ctrlconfigv1 "sigs.k8s.io/controller-runtime/pkg/config/v1alpha1"
 
 	"github.com/pluralsh/bootstrap-operator/pkg/providers"
 	"github.com/pluralsh/bootstrap-operator/pkg/resources"
 	"github.com/pluralsh/bootstrap-operator/pkg/resources/reconciling"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	clusterapioperator "sigs.k8s.io/cluster-api-operator/api/v1alpha1"
-	ctrlconfigv1 "sigs.k8s.io/controller-runtime/pkg/config/v1alpha1"
 )
 
 func InfrastructureCreator(data *resources.TemplateData) reconciling.NamedInfrastructureProviderCreatorGetter {
@@ -23,6 +25,13 @@ func InfrastructureCreator(data *resources.TemplateData) reconciling.NamedInfras
 			c.Name = provider.Name()
 			c.Namespace = data.Namespace
 			c.Spec.Version = provider.Version()
+
+			if len(provider.FetchConfigURL()) > 0 {
+				c.Spec.FetchConfig = &clusterapioperator.FetchConfiguration{
+					URL: fmt.Sprintf("%s/%s/infrastructure-components.yaml", provider.FetchConfigURL(), provider.Version()),
+				}
+			}
+
 			c.Spec.SecretName = provider.Secret()
 			c.Spec.Manager = &clusterapioperator.ManagerSpec{
 				ControllerManagerConfigurationSpec: ctrlconfigv1.ControllerManagerConfigurationSpec{
