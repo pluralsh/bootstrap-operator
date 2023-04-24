@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	api "github.com/weaveworks/eksctl/pkg/apis/eksctl.io/v1alpha5"
+	azure "sigs.k8s.io/cluster-api-provider-azure/api/v1beta1"
 	gcpexpv1beta1 "sigs.k8s.io/cluster-api-provider-gcp/exp/api/v1beta1"
 	"sigs.k8s.io/cluster-api/exp/api/v1beta1"
 
@@ -95,8 +96,9 @@ type ClusterAPIComponentSpec struct {
 }
 
 type CloudSpec struct {
-	AWS *AWSCloudSpec `json:"aws,omitempty"`
-	GCP *GCPCloudSpec `json:"gcp,omitempty"`
+	AWS   *AWSCloudSpec   `json:"aws,omitempty"`
+	Azure *AzureCloudSpec `json:"azure,omitempty"`
+	GCP   *GCPCloudSpec   `json:"gcp,omitempty"`
 }
 
 type AWSCloudSpec struct {
@@ -112,6 +114,18 @@ type AWSCloudSpec struct {
 	AccessKeyIDRef     corev1.SecretKeySelector `json:"accessKeyIdRef"`
 	SecretAccessKeyRef corev1.SecretKeySelector `json:"secretAccessKeyRef"`
 	SessionTokenRef    corev1.SecretKeySelector `json:"sessionTokenRef"`
+}
+
+type AzureCloudSpec struct {
+	ManagedCluster          *azure.AzureManagedClusterSpec      `json:"managedCluster"`
+	ControlPlane            *azure.AzureManagedControlPlaneSpec `json:"controlPlane"`
+	MachinePool             *AzureMachinePoolSpec               `json:"machinePool"`
+	CredentialsRef          corev1.SecretKeySelector            `json:"credentialsRef"`
+	ClusterAPIComponentSpec `json:",inline"`
+}
+
+type AzureMachinePoolSpec struct {
+	Replicas int32 `json:"replicas"`
 }
 
 type GCPMachinePoolSpec struct {
