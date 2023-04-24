@@ -14,5 +14,12 @@
 # Dependency directories (remove the comment below to include it)
 # vendor/
 
+# Binaries
 bin/
+
+# IDE-speficic files
 .idea/
+.vscode/
+
+# OS-specific files
+.DS_Store

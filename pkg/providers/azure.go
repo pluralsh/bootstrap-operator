@@ -24,6 +24,7 @@ type AzureProvider struct {
 	Data           *resources.TemplateData
 	Location       string
 	ClientSecret   string
+	GitHubToken    string
 	version        string
 	fetchConfigUrl string
 }
@@ -54,8 +55,10 @@ func (azure *AzureProvider) createCredentialSecret() error {
 			"EXP_MACHINE_POOL":                        []byte("true"),
 			"AZURE_LOCATION":                          []byte(azure.Location),
 			"AZURE_CLIENT_SECRET":                     []byte(azure.ClientSecret),
+			"clientSecret":                            []byte(azure.ClientSecret), // TODO Check which one is required.
 			"AZURE_CLUSTER_IDENTITY_SECRET_NAME":      []byte(azureSecretName),
 			"AZURE_CLUSTER_IDENTITY_SECRET_NAMESPACE": []byte(azure.Data.Namespace),
+			"GITHUB_TOKEN":                            []byte(azure.GitHubToken),
 		},
 	}
 	if err := azure.Data.Client.Create(azure.Data.Ctx, &secret); err != nil {
@@ -184,6 +187,7 @@ func (azure *AzureProvider) ReconcileCluster() error {
 
 	managedMachinePoolCreator := []reconciling.NamedAzureManagedMachinePoolCreatorGetter{
 		azureManagedMachinePoolCreator(azure.Data),
+		azureManagedUserMachinePoolCreator(azure.Data),
 	}
 	if err := reconciling.ReconcileAzureManagedMachinePools(azure.Data.Ctx, managedMachinePoolCreator, azure.Data.Namespace, azure.Data.Client); err != nil {
 		return err
@@ -201,13 +205,15 @@ func GetAzureProvider(data *resources.TemplateData) (*AzureProvider, error) {
 	}
 
 	credentials := strings.TrimSpace(string(secret.Data[spec.CredentialsRef.Key]))
+	gitHubToken := strings.TrimSpace(string(secret.Data[data.Bootstrap.Spec.GitHubSecretRef.Key]))
 	data.Log.Named("Azure provider").Info("Create Azure provider")
 	return &AzureProvider{
 		Data:           data,
 		ClientSecret:   credentials,
 		Location:       spec.ControlPlane.Location,
-		version:        spec.ControlPlane.Version,
+		version:        spec.Version,
 		fetchConfigUrl: spec.FetchConfigURL,
+		GitHubToken:    gitHubToken,
 	}, nil
 }
 
@@ -285,7 +291,7 @@ func azureMachinePoolCreator(data *resources.TemplateData) reconciling.NamedMach
 			c.Namespace = data.Namespace
 			c.Spec = clusterapiexp.MachinePoolSpec{
 				ClusterName: data.Bootstrap.Spec.ClusterName,
-				Replicas:    resources.Int32(data.Bootstrap.Spec.CloudSpec.Azure.MachinePool.Replicas),
+				Replicas:    resources.Int32(2), // TODO: Change it.
 				Template: clusterapi.MachineTemplateSpec{
 					Spec: clusterapi.MachineSpec{
 						Bootstrap: clusterapi.Bootstrap{
@@ -311,7 +317,26 @@ func azureManagedMachinePoolCreator(data *resources.TemplateData) reconciling.Na
 			c.Name = fmt.Sprintf("%s-%s", data.Bootstrap.Spec.ClusterName, "pool-0")
 			c.Namespace = data.Namespace
 			// TODO: Check spec
-			c.Spec = azure.AzureManagedMachinePoolSpec{}
+			c.Spec = azure.AzureManagedMachinePoolSpec{
+				Mode: "User",
+				SKU:  "Standard_D2s_v3",
+			}
+
+			return c, nil
+		}
+	}
+}
+
+func azureManagedUserMachinePoolCreator(data *resources.TemplateData) reconciling.NamedAzureManagedMachinePoolCreatorGetter {
+	return func() (string, reconciling.AzureManagedMachinePoolCreator) {
+		return fmt.Sprintf("%s-%s", data.Bootstrap.Spec.ClusterName, "pool-0"), func(c *azure.AzureManagedMachinePool) (*azure.AzureManagedMachinePool, error) {
+			c.Name = fmt.Sprintf("%s-%s", data.Bootstrap.Spec.ClusterName, "pool-0")
+			c.Namespace = data.Namespace
+			// TODO: Check spec change to system
+			c.Spec = azure.AzureManagedMachinePoolSpec{
+				Mode: "User",
+				SKU:  "Standard_D2s_v3",
+			}
 
 			return c, nil
 		}
