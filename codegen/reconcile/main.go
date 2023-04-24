@@ -142,6 +142,23 @@ func main() {
 				ImportAlias:        "apiextensionsv1",
 				ResourceImportPath: "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1",
 			},
+			{
+				ResourceName:       "AzureManagedControlPlane",
+				ImportAlias:        "azurecontroleplane",
+				ResourceImportPath: "sigs.k8s.io/cluster-api-provider-azure/api/v1beta1",
+			},
+			{
+				ResourceName: "AzureManagedCluster",
+				ImportAlias:  "azurecontroleplane",
+			},
+			{
+				ResourceName: "AzureManagedMachinePool",
+				ImportAlias:  "azurecontroleplane",
+			},
+			{
+				ResourceName: "AzureClusterIdentity",
+				ImportAlias:  "azurecontroleplane",
+			},
 		},
 	}
 
