@@ -89,7 +89,6 @@ func (azure *AzureProvider) createCredentialSecret() error {
 			"AZURE_CLIENT_SECRET":                     []byte(azure.ClientSecret),
 			"AZURE_CLIENT_ID":                         []byte(azure.ClientID),
 			"AZURE_TENANT_ID":                         []byte(azure.TenantID),
-			"AZURE_SUBSCRIPTION_ID":                   []byte(azure.SubscriptionID),
 			"AZURE_CLUSTER_IDENTITY_SECRET_NAME":      []byte(azureClusterIdentitySecretName),
 			"AZURE_CLUSTER_IDENTITY_SECRET_NAMESPACE": []byte(azure.Data.Namespace),
 			"EXP_MACHINE_POOL":                        []byte("true"),
@@ -379,9 +378,8 @@ func azureManagedMachinePoolCreator(data *resources.TemplateData) reconciling.Na
 		return fmt.Sprintf("%s-%s", data.Bootstrap.Spec.ClusterName, "pool-0"), func(c *azure.AzureManagedMachinePool) (*azure.AzureManagedMachinePool, error) {
 			c.Name = fmt.Sprintf("%s-%s", data.Bootstrap.Spec.ClusterName, "pool-0")
 			c.Namespace = data.Namespace
-			// TODO: Check spec
 			c.Spec = azure.AzureManagedMachinePoolSpec{
-				Mode: "User",
+				Mode: "System",
 				SKU:  "Standard_D2s_v3",
 			}
 
@@ -395,7 +393,6 @@ func azureManagedUserMachinePoolCreator(data *resources.TemplateData) reconcilin
 		return fmt.Sprintf("%s-%s", data.Bootstrap.Spec.ClusterName, "pool-0"), func(c *azure.AzureManagedMachinePool) (*azure.AzureManagedMachinePool, error) {
 			c.Name = fmt.Sprintf("%s-%s", data.Bootstrap.Spec.ClusterName, "pool-0")
 			c.Namespace = data.Namespace
-			// TODO: Check spec change to system
 			c.Spec = azure.AzureManagedMachinePoolSpec{
 				Mode: "User",
 				SKU:  "Standard_D2s_v3",
