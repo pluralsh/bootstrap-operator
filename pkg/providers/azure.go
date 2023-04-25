@@ -25,7 +25,6 @@ type AzureProvider struct {
 	ClientSecret   string
 	ClientID       string
 	TenantID       string
-	SubscriptionID string
 	GitHubToken    string
 	version        string
 	fetchConfigUrl string
@@ -50,7 +49,6 @@ func GetAzureProvider(data *resources.TemplateData) (*AzureProvider, error) {
 	clientSecret := strings.TrimSpace(string(secret.Data[spec.ClientSecretRef.Key]))
 	clientID := strings.TrimSpace(string(secret.Data[spec.ClientIDRef.Key]))
 	tenantID := strings.TrimSpace(string(secret.Data[spec.TenantIDRef.Key]))
-	subscriptionID := strings.TrimSpace(string(secret.Data[spec.SubscriptionIDRef.Key]))
 	gitHubToken := strings.TrimSpace(string(secret.Data[data.Bootstrap.Spec.GitHubSecretRef.Key]))
 	data.Log.Named("Azure provider").Info("Create Azure provider")
 	return &AzureProvider{
@@ -61,7 +59,6 @@ func GetAzureProvider(data *resources.TemplateData) (*AzureProvider, error) {
 		ClientSecret:   clientSecret,
 		ClientID:       clientID,
 		TenantID:       tenantID,
-		SubscriptionID: subscriptionID,
 		GitHubToken:    gitHubToken,
 	}, nil
 }

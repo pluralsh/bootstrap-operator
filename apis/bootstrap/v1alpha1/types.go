@@ -119,13 +119,13 @@ type AWSCloudSpec struct {
 
 type AzureCloudSpec struct {
 	ClusterAPIComponentSpec `json:",inline"`
+	ClusterIdentity         *azure.AzureClusterIdentitySpec     `json:"clusterIdentity"`
 	ManagedCluster          *azure.AzureManagedClusterSpec      `json:"managedCluster"`
 	ControlPlane            *azure.AzureManagedControlPlaneSpec `json:"controlPlane"`
 	MachinePool             *AzureMachinePoolSpec               `json:"machinePool"`
 	ClientSecretRef         corev1.SecretKeySelector            `json:"clientSecretRef"`
 	ClientIDRef             corev1.SecretKeySelector            `json:"clientIDRef"`
 	TenantIDRef             corev1.SecretKeySelector            `json:"tenantIDRef"`
-	SubscriptionIDRef       corev1.SecretKeySelector            `json:"subscriptionIDRef"`
 }
 
 type AzureMachinePoolSpec struct {
