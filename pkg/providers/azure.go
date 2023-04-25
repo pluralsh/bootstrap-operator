@@ -390,8 +390,8 @@ func azureManagedMachinePoolCreator(data *resources.TemplateData) reconciling.Na
 
 func azureManagedUserMachinePoolCreator(data *resources.TemplateData) reconciling.NamedAzureManagedMachinePoolCreatorGetter {
 	return func() (string, reconciling.AzureManagedMachinePoolCreator) {
-		return fmt.Sprintf("%s-%s", data.Bootstrap.Spec.ClusterName, "pool-0"), func(c *azure.AzureManagedMachinePool) (*azure.AzureManagedMachinePool, error) {
-			c.Name = fmt.Sprintf("%s-%s", data.Bootstrap.Spec.ClusterName, "pool-0")
+		return fmt.Sprintf("%s-%s", data.Bootstrap.Spec.ClusterName, "pool-1"), func(c *azure.AzureManagedMachinePool) (*azure.AzureManagedMachinePool, error) {
+			c.Name = fmt.Sprintf("%s-%s", data.Bootstrap.Spec.ClusterName, "pool-1")
 			c.Namespace = data.Namespace
 			c.Spec = azure.AzureManagedMachinePoolSpec{
 				Mode: "User",
