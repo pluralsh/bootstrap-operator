@@ -261,7 +261,7 @@ func (azure *AzureProvider) ReconcileCluster() error {
 
 func azureClusterIdentityCreator(azureProvider *AzureProvider) reconciling.NamedAzureClusterIdentityCreatorGetter {
 	return func() (string, reconciling.AzureClusterIdentityCreator) {
-		return azureProvider.Data.Bootstrap.Spec.ClusterName, func(c *azure.AzureClusterIdentity) (*azure.AzureClusterIdentity, error) {
+		return azureClusterIdentityName, func(c *azure.AzureClusterIdentity) (*azure.AzureClusterIdentity, error) {
 			c.Name = azureClusterIdentityName
 			c.Namespace = azureProvider.Data.Namespace
 			c.Spec = azure.AzureClusterIdentitySpec{
