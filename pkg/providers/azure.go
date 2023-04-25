@@ -8,7 +8,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	azure "sigs.k8s.io/cluster-api-provider-azure/api/v1beta1"
-	clusterapi "sigs.k8s.io/cluster-api/api/v1beta1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	clusterapiexp "sigs.k8s.io/cluster-api/exp/api/v1beta1"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -24,14 +23,48 @@ type AzureProvider struct {
 	Data           *resources.TemplateData
 	Location       string
 	ClientSecret   string
+	ClientID       string
+	TenantID       string
+	SubscriptionID string
 	GitHubToken    string
 	version        string
 	fetchConfigUrl string
 }
 
 const (
-	azureSecretName = "azure-credentials"
+	azureSecretName                = "azure-credentials"
+	azureClusterIdentityName       = "azure-cluster-identity"
+	azureClusterIdentitySecretName = "azure-cluster-identity-secret"
 )
+
+func GetAzureProvider(data *resources.TemplateData) (*AzureProvider, error) {
+	spec := data.Bootstrap.Spec.CloudSpec.Azure
+
+	// TODO: Right now it assumes that same secret is used for all refs, that's why client is retrieved only once.
+	// It should be changed.
+	var secret corev1.Secret
+	if err := data.Client.Get(data.Ctx, ctrlruntimeclient.ObjectKey{Namespace: data.Namespace, Name: spec.ClientSecretRef.Name}, &secret); err != nil {
+		return nil, err
+	}
+
+	clientSecret := strings.TrimSpace(string(secret.Data[spec.ClientSecretRef.Key]))
+	clientID := strings.TrimSpace(string(secret.Data[spec.ClientIDRef.Key]))
+	tenantID := strings.TrimSpace(string(secret.Data[spec.TenantIDRef.Key]))
+	subscriptionID := strings.TrimSpace(string(secret.Data[spec.SubscriptionIDRef.Key]))
+	gitHubToken := strings.TrimSpace(string(secret.Data[data.Bootstrap.Spec.GitHubSecretRef.Key]))
+	data.Log.Named("Azure provider").Info("Create Azure provider")
+	return &AzureProvider{
+		Data:           data,
+		version:        spec.Version,
+		fetchConfigUrl: spec.FetchConfigURL,
+		Location:       spec.ControlPlane.Location,
+		ClientSecret:   clientSecret,
+		ClientID:       clientID,
+		TenantID:       tenantID,
+		SubscriptionID: subscriptionID,
+		GitHubToken:    gitHubToken,
+	}, nil
+}
 
 func (azure *AzureProvider) Name() string {
 	return "azure"
@@ -52,13 +85,31 @@ func (azure *AzureProvider) createCredentialSecret() error {
 			Name:      azureSecretName,
 		},
 		Data: map[string][]byte{
-			"EXP_MACHINE_POOL":                        []byte("true"),
 			"AZURE_LOCATION":                          []byte(azure.Location),
 			"AZURE_CLIENT_SECRET":                     []byte(azure.ClientSecret),
-			"clientSecret":                            []byte(azure.ClientSecret), // TODO Check which one is required.
-			"AZURE_CLUSTER_IDENTITY_SECRET_NAME":      []byte(azureSecretName),
+			"AZURE_CLIENT_ID":                         []byte(azure.ClientID),
+			"AZURE_TENANT_ID":                         []byte(azure.TenantID),
+			"AZURE_SUBSCRIPTION_ID":                   []byte(azure.SubscriptionID),
+			"AZURE_CLUSTER_IDENTITY_SECRET_NAME":      []byte(azureClusterIdentitySecretName),
 			"AZURE_CLUSTER_IDENTITY_SECRET_NAMESPACE": []byte(azure.Data.Namespace),
+			"EXP_MACHINE_POOL":                        []byte("true"),
 			"GITHUB_TOKEN":                            []byte(azure.GitHubToken),
+		},
+	}
+	if err := azure.Data.Client.Create(azure.Data.Ctx, &secret); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (azure *AzureProvider) createClusterIdentitySecret() error {
+	secret := corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: azure.Data.Namespace,
+			Name:      azureClusterIdentitySecretName,
+		},
+		Data: map[string][]byte{
+			"clientSecret": []byte(azure.ClientSecret),
 		},
 	}
 	if err := azure.Data.Client.Create(azure.Data.Ctx, &secret); err != nil {
@@ -73,6 +124,11 @@ func (azure *AzureProvider) Init() (*ctrl.Result, error) {
 			return nil, err
 		}
 		if err := azure.createCredentialSecret(); err != nil {
+			if err := azure.updateProviderStatus(bv1alpha1.Error, err.Error(), false); err != nil {
+				return nil, err
+			}
+		}
+		if err := azure.createClusterIdentitySecret(); err != nil {
 			if err := azure.updateProviderStatus(bv1alpha1.Error, err.Error(), false); err != nil {
 				return nil, err
 			}
@@ -109,7 +165,7 @@ func (azure *AzureProvider) Secret() string {
 }
 
 func (azure *AzureProvider) CheckCluster() (*ctrl.Result, error) {
-	var cluster clusterapi.Cluster
+	var cluster clusterv1.Cluster
 	if err := azure.Data.Client.Get(azure.Data.Ctx, ctrlruntimeclient.ObjectKey{
 		Namespace: azure.Data.Namespace,
 		Name:      azure.Data.Bootstrap.Spec.ClusterName}, &cluster); err != nil {
@@ -138,7 +194,7 @@ func (azure *AzureProvider) setStatusReady() error {
 	})
 }
 
-func (azure *AzureProvider) updateClusterStatus(status clusterapi.ClusterStatus) error {
+func (azure *AzureProvider) updateClusterStatus(status clusterv1.ClusterStatus) error {
 	err := helper.UpdateBootstrapStatus(azure.Data.Ctx, azure.Data.Client, azure.Data.Bootstrap, func(c *bv1alpha1.Bootstrap) {
 		if c.Status.CapiClusterStatus == nil {
 			c.Status.CapiClusterStatus = &bv1alpha1.ClusterStatus{}
@@ -157,6 +213,13 @@ func (azure *AzureProvider) updateClusterStatus(status clusterapi.ClusterStatus)
 }
 
 func (azure *AzureProvider) ReconcileCluster() error {
+	clusterIdentityCreator := []reconciling.NamedAzureClusterIdentityCreatorGetter{
+		azureClusterIdentityCreator(azure),
+	}
+	if err := reconciling.ReconcileAzureClusterIdentitys(azure.Data.Ctx, clusterIdentityCreator, azure.Data.Namespace, azure.Data.Client); err != nil {
+		return err
+	}
+
 	clusterCreator := []reconciling.NamedClusterCreatorGetter{
 		azureClusterCreator(azure.Data),
 	}
@@ -196,46 +259,45 @@ func (azure *AzureProvider) ReconcileCluster() error {
 	return nil
 }
 
-func GetAzureProvider(data *resources.TemplateData) (*AzureProvider, error) {
-	spec := data.Bootstrap.Spec.CloudSpec.Azure
+func azureClusterIdentityCreator(azureProvider *AzureProvider) reconciling.NamedAzureClusterIdentityCreatorGetter {
+	return func() (string, reconciling.AzureClusterIdentityCreator) {
+		return azureProvider.Data.Bootstrap.Spec.ClusterName, func(c *azure.AzureClusterIdentity) (*azure.AzureClusterIdentity, error) {
+			c.Name = azureClusterIdentityName
+			c.Namespace = azureProvider.Data.Namespace
+			c.Spec = azure.AzureClusterIdentitySpec{
+				Type:     azure.ServicePrincipal,
+				ClientID: azureProvider.ClientID,
+				ClientSecret: corev1.SecretReference{
+					Name:      azureSecretName,
+					Namespace: azureProvider.Data.Namespace,
+				},
+				TenantID: azureProvider.TenantID,
+			}
 
-	var secret corev1.Secret
-	if err := data.Client.Get(data.Ctx, ctrlruntimeclient.ObjectKey{Namespace: data.Namespace, Name: spec.CredentialsRef.Name}, &secret); err != nil {
-		return nil, err
+			return c, nil
+		}
 	}
-
-	credentials := strings.TrimSpace(string(secret.Data[spec.CredentialsRef.Key]))
-	gitHubToken := strings.TrimSpace(string(secret.Data[data.Bootstrap.Spec.GitHubSecretRef.Key]))
-	data.Log.Named("Azure provider").Info("Create Azure provider")
-	return &AzureProvider{
-		Data:           data,
-		ClientSecret:   credentials,
-		Location:       spec.ControlPlane.Location,
-		version:        spec.Version,
-		fetchConfigUrl: spec.FetchConfigURL,
-		GitHubToken:    gitHubToken,
-	}, nil
 }
 
 func azureClusterCreator(data *resources.TemplateData) reconciling.NamedClusterCreatorGetter {
 	return func() (string, reconciling.ClusterCreator) {
-		return data.Bootstrap.Spec.ClusterName, func(c *clusterapi.Cluster) (*clusterapi.Cluster, error) {
+		return data.Bootstrap.Spec.ClusterName, func(c *clusterv1.Cluster) (*clusterv1.Cluster, error) {
 			name := data.Bootstrap.Spec.ClusterName
 			c.Name = name
 			c.Namespace = data.Namespace
-			c.Spec = clusterapi.ClusterSpec{
-				ClusterNetwork: &clusterapi.ClusterNetwork{
+			c.Spec = clusterv1.ClusterSpec{
+				ClusterNetwork: &clusterv1.ClusterNetwork{
 					APIServerPort: data.Bootstrap.Spec.ClusterNetwork.APIServerPort,
 					ServiceDomain: data.Bootstrap.Spec.ClusterNetwork.ServiceDomain,
 				},
 			}
 			if data.Bootstrap.Spec.ClusterNetwork.Pods != nil {
-				c.Spec.ClusterNetwork.Pods = &clusterapi.NetworkRanges{
+				c.Spec.ClusterNetwork.Pods = &clusterv1.NetworkRanges{
 					CIDRBlocks: data.Bootstrap.Spec.ClusterNetwork.Pods.CIDRBlocks,
 				}
 			}
 			if data.Bootstrap.Spec.ClusterNetwork.Services != nil {
-				c.Spec.ClusterNetwork.Services = &clusterapi.NetworkRanges{
+				c.Spec.ClusterNetwork.Services = &clusterv1.NetworkRanges{
 					CIDRBlocks: data.Bootstrap.Spec.ClusterNetwork.Services.CIDRBlocks,
 				}
 			}
@@ -292,9 +354,9 @@ func azureMachinePoolCreator(data *resources.TemplateData) reconciling.NamedMach
 			c.Spec = clusterapiexp.MachinePoolSpec{
 				ClusterName: data.Bootstrap.Spec.ClusterName,
 				Replicas:    resources.Int32(2), // TODO: Change it.
-				Template: clusterapi.MachineTemplateSpec{
-					Spec: clusterapi.MachineSpec{
-						Bootstrap: clusterapi.Bootstrap{
+				Template: clusterv1.MachineTemplateSpec{
+					Spec: clusterv1.MachineSpec{
+						Bootstrap: clusterv1.Bootstrap{
 							DataSecretName: resources.StrPtr(""),
 						},
 						ClusterName: data.Bootstrap.Spec.ClusterName,
