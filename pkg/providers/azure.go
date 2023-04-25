@@ -265,13 +265,14 @@ func azureClusterIdentityCreator(azureProvider *AzureProvider) reconciling.Named
 			c.Name = azureClusterIdentityName
 			c.Namespace = azureProvider.Data.Namespace
 			c.Spec = azure.AzureClusterIdentitySpec{
-				Type:     azure.ServicePrincipal,
-				ClientID: azureProvider.ClientID,
 				ClientSecret: corev1.SecretReference{
 					Name:      azureSecretName,
 					Namespace: azureProvider.Data.Namespace,
 				},
-				TenantID: azureProvider.TenantID,
+				ClientID:          azureProvider.ClientID,
+				TenantID:          azureProvider.TenantID,
+				Type:              azure.ServicePrincipal,
+				AllowedNamespaces: &azure.AllowedNamespaces{},
 			}
 
 			return c, nil
