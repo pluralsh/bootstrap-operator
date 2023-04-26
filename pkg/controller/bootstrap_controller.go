@@ -3,6 +3,7 @@ package controller
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/pluralsh/bootstrap-operator/apis/bootstrap/helper"
 
@@ -35,6 +36,13 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 
 	if !bootstrap.GetDeletionTimestamp().IsZero() {
 		return ctrl.Result{}, nil
+	}
+
+	if !r.CheckCertManager(ctx) {
+		r.Log.Info("Waiting for cert manager")
+		return ctrl.Result{
+			RequeueAfter: 5 * time.Second,
+		}, nil
 	}
 
 	if bootstrap.Status.CapiOperatorStatus == nil {
