@@ -231,47 +231,7 @@ spec:
                     type: object
                   azure:
                     properties:
-                      clientIDRef:
-                        description: SecretKeySelector selects a key of a Secret.
-                        properties:
-                          key:
-                            description: The key of the secret to select from.  Must
-                              be a valid secret key.
-                            type: string
-                          name:
-                            description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
-                              TODO: Add other useful fields. apiVersion, kind, uid?'
-                            type: string
-                          optional:
-                            description: Specify whether the Secret or its key must
-                              be defined
-                            type: boolean
-                        required:
-                        - key
-                        type: object
-                        x-kubernetes-map-type: atomic
-                      clientSecretRef:
-                        description: SecretKeySelector selects a key of a Secret.
-                        properties:
-                          key:
-                            description: The key of the secret to select from.  Must
-                              be a valid secret key.
-                            type: string
-                          name:
-                            description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
-                              TODO: Add other useful fields. apiVersion, kind, uid?'
-                            type: string
-                          optional:
-                            description: Specify whether the Secret or its key must
-                              be defined
-                            type: boolean
-                        required:
-                        - key
-                        type: object
-                        x-kubernetes-map-type: atomic
                       clusterIdentity:
-                        description: AzureClusterIdentitySpec defines the parameters
-                          that are used to create an AzureIdentity.
                         properties:
                           allowedNamespaces:
                             description: AllowedNamespaces is used to identify the
@@ -366,6 +326,10 @@ spec:
                                 type: string
                             type: object
                             x-kubernetes-map-type: atomic
+                          name:
+                            type: string
+                          namespace:
+                            type: string
                           resourceID:
                             description: ResourceID is the Azure resource ID for the
                               User Assigned MSI resource. Only applicable when type
@@ -387,6 +351,8 @@ spec:
                             type: string
                         required:
                         - clientID
+                        - name
+                        - namespace
                         - tenantID
                         - type
                         type: object
@@ -896,16 +862,6 @@ spec:
                         type: object
                       fetchConfigUrl:
                         type: string
-                      machinePool:
-                        properties:
-                          mode:
-                            type: string
-                          sku:
-                            type: string
-                        required:
-                        - mode
-                        - sku
-                        type: object
                       managedCluster:
                         description: AzureManagedClusterSpec defines the desired state
                           of AzureManagedCluster.
@@ -927,35 +883,12 @@ spec:
                             - port
                             type: object
                         type: object
-                      tenantIDRef:
-                        description: SecretKeySelector selects a key of a Secret.
-                        properties:
-                          key:
-                            description: The key of the secret to select from.  Must
-                              be a valid secret key.
-                            type: string
-                          name:
-                            description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
-                              TODO: Add other useful fields. apiVersion, kind, uid?'
-                            type: string
-                          optional:
-                            description: Specify whether the Secret or its key must
-                              be defined
-                            type: boolean
-                        required:
-                        - key
-                        type: object
-                        x-kubernetes-map-type: atomic
                       version:
                         type: string
                     required:
-                    - clientIDRef
-                    - clientSecretRef
                     - clusterIdentity
                     - controlPlane
-                    - machinePool
                     - managedCluster
-                    - tenantIDRef
                     type: object
                   gcp:
                     properties:

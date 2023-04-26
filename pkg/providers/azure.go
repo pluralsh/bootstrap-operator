@@ -21,44 +21,31 @@ import (
 
 type AzureProvider struct {
 	Data           *resources.TemplateData
-	Location       string
-	ClientSecret   string
-	ClientID       string
-	TenantID       string
 	GitHubToken    string
 	version        string
 	fetchConfigUrl string
 }
 
 const (
-	azureSecretName                = "azure-credentials"
-	azureClusterIdentityName       = "azure-cluster-identity"
-	azureClusterIdentitySecretName = "azure-cluster-identity-secret"
+	azureSecretName = "azure-credentials"
 )
 
 func GetAzureProvider(data *resources.TemplateData) (*AzureProvider, error) {
-	spec := data.Bootstrap.Spec.CloudSpec.Azure
+	spec := data.Bootstrap.Spec
+	azureSpec := spec.CloudSpec.Azure
 
-	// TODO: Right now it assumes that same secret is used for all refs, that's why client is retrieved only once.
-	// It should be changed.
 	var secret corev1.Secret
-	if err := data.Client.Get(data.Ctx, ctrlruntimeclient.ObjectKey{Namespace: data.Namespace, Name: spec.ClientSecretRef.Name}, &secret); err != nil {
+	if err := data.Client.Get(data.Ctx, ctrlruntimeclient.ObjectKey{
+		Namespace: data.Namespace, Name: spec.GitHubSecretRef.Name}, &secret); err != nil {
 		return nil, err
 	}
+	gitHubToken := strings.TrimSpace(string(secret.Data[spec.GitHubSecretRef.Key]))
 
-	clientSecret := strings.TrimSpace(string(secret.Data[spec.ClientSecretRef.Key]))
-	clientID := strings.TrimSpace(string(secret.Data[spec.ClientIDRef.Key]))
-	tenantID := strings.TrimSpace(string(secret.Data[spec.TenantIDRef.Key]))
-	gitHubToken := strings.TrimSpace(string(secret.Data[data.Bootstrap.Spec.GitHubSecretRef.Key]))
 	data.Log.Named("Azure provider").Info("Create Azure provider")
 	return &AzureProvider{
 		Data:           data,
-		version:        spec.Version,
-		fetchConfigUrl: spec.FetchConfigURL,
-		Location:       spec.ControlPlane.Location,
-		ClientSecret:   clientSecret,
-		ClientID:       clientID,
-		TenantID:       tenantID,
+		version:        azureSpec.Version,
+		fetchConfigUrl: azureSpec.FetchConfigURL,
 		GitHubToken:    gitHubToken,
 	}, nil
 }
@@ -82,30 +69,8 @@ func (azure *AzureProvider) createCredentialSecret() error {
 			Name:      azureSecretName,
 		},
 		Data: map[string][]byte{
-			"AZURE_LOCATION":                          []byte(azure.Location),
-			"AZURE_CLIENT_SECRET":                     []byte(azure.ClientSecret),
-			"AZURE_CLIENT_ID":                         []byte(azure.ClientID),
-			"AZURE_TENANT_ID":                         []byte(azure.TenantID),
-			"AZURE_CLUSTER_IDENTITY_SECRET_NAME":      []byte(azureClusterIdentitySecretName),
-			"AZURE_CLUSTER_IDENTITY_SECRET_NAMESPACE": []byte(azure.Data.Namespace),
-			"EXP_MACHINE_POOL":                        []byte("true"),
-			"GITHUB_TOKEN":                            []byte(azure.GitHubToken),
-		},
-	}
-	if err := azure.Data.Client.Create(azure.Data.Ctx, &secret); err != nil {
-		return err
-	}
-	return nil
-}
-
-func (azure *AzureProvider) createClusterIdentitySecret() error {
-	secret := corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: azure.Data.Namespace,
-			Name:      azureClusterIdentitySecretName,
-		},
-		Data: map[string][]byte{
-			"clientSecret": []byte(azure.ClientSecret),
+			"EXP_MACHINE_POOL": []byte("true"),
+			"GITHUB_TOKEN":     []byte(azure.GitHubToken),
 		},
 	}
 	if err := azure.Data.Client.Create(azure.Data.Ctx, &secret); err != nil {
@@ -120,11 +85,6 @@ func (azure *AzureProvider) Init() (*ctrl.Result, error) {
 			return nil, err
 		}
 		if err := azure.createCredentialSecret(); err != nil {
-			if err := azure.updateProviderStatus(bv1alpha1.Error, err.Error(), false); err != nil {
-				return nil, err
-			}
-		}
-		if err := azure.createClusterIdentitySecret(); err != nil {
 			if err := azure.updateProviderStatus(bv1alpha1.Error, err.Error(), false); err != nil {
 				return nil, err
 			}
@@ -210,7 +170,7 @@ func (azure *AzureProvider) updateClusterStatus(status clusterv1.ClusterStatus) 
 
 func (azure *AzureProvider) ReconcileCluster() error {
 	clusterIdentityCreator := []reconciling.NamedAzureClusterIdentityCreatorGetter{
-		azureClusterIdentityCreator(azure),
+		azureClusterIdentityCreator(azure.Data),
 	}
 	if err := reconciling.ReconcileAzureClusterIdentitys(azure.Data.Ctx, clusterIdentityCreator, azure.Data.Namespace, azure.Data.Client); err != nil {
 		return err
@@ -237,6 +197,8 @@ func (azure *AzureProvider) ReconcileCluster() error {
 		return err
 	}
 
+	// TODO: At the moment only one machine pool with one respective managed machine pool will be created.
+	// In the future it should be possible to specify multiple machine pools at the cloud spec level.
 	machinePoolCreator := []reconciling.NamedMachinePoolCreatorGetter{
 		azureMachinePoolCreator(azure.Data),
 	}
@@ -246,7 +208,6 @@ func (azure *AzureProvider) ReconcileCluster() error {
 
 	managedMachinePoolCreator := []reconciling.NamedAzureManagedMachinePoolCreatorGetter{
 		azureManagedMachinePoolCreator(azure.Data),
-		azureManagedUserMachinePoolCreator(azure.Data),
 	}
 	if err := reconciling.ReconcileAzureManagedMachinePools(azure.Data.Ctx, managedMachinePoolCreator, azure.Data.Namespace, azure.Data.Client); err != nil {
 		return err
@@ -255,21 +216,12 @@ func (azure *AzureProvider) ReconcileCluster() error {
 	return nil
 }
 
-func azureClusterIdentityCreator(azureProvider *AzureProvider) reconciling.NamedAzureClusterIdentityCreatorGetter {
+func azureClusterIdentityCreator(data *resources.TemplateData) reconciling.NamedAzureClusterIdentityCreatorGetter {
 	return func() (string, reconciling.AzureClusterIdentityCreator) {
-		return azureClusterIdentityName, func(c *azure.AzureClusterIdentity) (*azure.AzureClusterIdentity, error) {
-			c.Name = azureClusterIdentityName
-			c.Namespace = azureProvider.Data.Namespace
-			c.Spec = azure.AzureClusterIdentitySpec{
-				ClientSecret: corev1.SecretReference{
-					Name:      azureSecretName,
-					Namespace: azureProvider.Data.Namespace,
-				},
-				ClientID:          azureProvider.ClientID,
-				TenantID:          azureProvider.TenantID,
-				Type:              azure.ServicePrincipal,
-				AllowedNamespaces: &azure.AllowedNamespaces{},
-			}
+		return data.Bootstrap.Spec.CloudSpec.Azure.ClusterIdentity.Name, func(c *azure.AzureClusterIdentity) (*azure.AzureClusterIdentity, error) {
+			c.Name = data.Bootstrap.Spec.CloudSpec.Azure.ClusterIdentity.Name
+			c.Namespace = data.Namespace
+			c.Spec = data.Bootstrap.Spec.CloudSpec.Azure.ClusterIdentity.AzureClusterIdentitySpec
 
 			return c, nil
 		}
@@ -350,7 +302,7 @@ func azureMachinePoolCreator(data *resources.TemplateData) reconciling.NamedMach
 			c.Namespace = data.Namespace
 			c.Spec = clusterapiexp.MachinePoolSpec{
 				ClusterName: data.Bootstrap.Spec.ClusterName,
-				Replicas:    resources.Int32(2), // TODO: Change it.
+				Replicas:    resources.Int32(3),
 				Template: clusterv1.MachineTemplateSpec{
 					Spec: clusterv1.MachineSpec{
 						Bootstrap: clusterv1.Bootstrap{
@@ -377,21 +329,6 @@ func azureManagedMachinePoolCreator(data *resources.TemplateData) reconciling.Na
 			c.Namespace = data.Namespace
 			c.Spec = azure.AzureManagedMachinePoolSpec{
 				Mode: "System",
-				SKU:  "Standard_D2s_v3",
-			}
-
-			return c, nil
-		}
-	}
-}
-
-func azureManagedUserMachinePoolCreator(data *resources.TemplateData) reconciling.NamedAzureManagedMachinePoolCreatorGetter {
-	return func() (string, reconciling.AzureManagedMachinePoolCreator) {
-		return fmt.Sprintf("%s-%s", data.Bootstrap.Spec.ClusterName, "pool-1"), func(c *azure.AzureManagedMachinePool) (*azure.AzureManagedMachinePool, error) {
-			c.Name = fmt.Sprintf("%s-%s", data.Bootstrap.Spec.ClusterName, "pool-1")
-			c.Namespace = data.Namespace
-			c.Spec = azure.AzureManagedMachinePoolSpec{
-				Mode: "User",
 				SKU:  "Standard_D2s_v3",
 			}
 
