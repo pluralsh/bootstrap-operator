@@ -296,8 +296,8 @@ func azureManageControlPlaneCreator(data *resources.TemplateData) reconciling.Na
 
 func azureMachinePoolCreator(data *resources.TemplateData) reconciling.NamedMachinePoolCreatorGetter {
 	return func() (string, reconciling.MachinePoolCreator) {
-		return fmt.Sprintf("%s-%s", data.Bootstrap.Spec.ClusterName, "pool-0"), func(c *clusterapiexp.MachinePool) (*clusterapiexp.MachinePool, error) {
-			name := fmt.Sprintf("%s-%s", data.Bootstrap.Spec.ClusterName, "pool-0")
+		return "pool0", func(c *clusterapiexp.MachinePool) (*clusterapiexp.MachinePool, error) {
+			name := "pool0"
 			c.Name = name
 			c.Namespace = data.Namespace
 			c.Spec = clusterapiexp.MachinePoolSpec{
@@ -324,11 +324,12 @@ func azureMachinePoolCreator(data *resources.TemplateData) reconciling.NamedMach
 
 func azureManagedMachinePoolCreator(data *resources.TemplateData) reconciling.NamedAzureManagedMachinePoolCreatorGetter {
 	return func() (string, reconciling.AzureManagedMachinePoolCreator) {
-		return fmt.Sprintf("%s-%s", data.Bootstrap.Spec.ClusterName, "pool-0"), func(c *azure.AzureManagedMachinePool) (*azure.AzureManagedMachinePool, error) {
-			c.Name = fmt.Sprintf("%s-%s", data.Bootstrap.Spec.ClusterName, "pool-0")
+		return "pool0", func(c *azure.AzureManagedMachinePool) (*azure.AzureManagedMachinePool, error) {
+			c.Name = "pool0"
 			c.Namespace = data.Namespace
 			c.Spec = azure.AzureManagedMachinePoolSpec{
 				Mode: "System",
+				Name: resources.StrPtr("pool0"),
 				SKU:  "Standard_D2s_v3",
 			}
 
