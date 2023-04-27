@@ -229,6 +229,265 @@ spec:
                     - secretAccessKeyRef
                     - sessionTokenRef
                     type: object
+                  azure:
+                    properties:
+                      clusterIdentity:
+                        description: AzureClusterIdentity defines the parameters that
+                          are used to create an AzureIdentity.
+                        properties:
+                          allowedNamespaces:
+                            description: AllowedNamespaces is used to identify the
+                              namespaces the clusters are allowed to use the identity
+                              from. Namespaces can be selected either using an array
+                              of namespaces or with label selector. An empty allowedNamespaces
+                              object indicates that AzureClusters can use this identity
+                              from any namespace. If this object is nil, no namespaces
+                              will be allowed (default behaviour, if this field is
+                              not provided) A namespace should be either in the NamespaceList
+                              or match with Selector to use the identity.
+                            nullable: true
+                            properties:
+                              list:
+                                description: A nil or empty list indicates that AzureCluster
+                                  cannot use the identity from any namespace.
+                                items:
+                                  type: string
+                                nullable: true
+                                type: array
+                              selector:
+                                description: "Selector is a selector of namespaces
+                                  that AzureCluster can use this Identity from. This
+                                  is a standard Kubernetes LabelSelector, a label
+                                  query over a set of resources. The result of matchLabels
+                                  and matchExpressions are ANDed. \n A nil or empty
+                                  selector indicates that AzureCluster cannot use
+                                  this AzureClusterIdentity from any namespace."
+                                properties:
+                                  matchExpressions:
+                                    description: matchExpressions is a list of label
+                                      selector requirements. The requirements are
+                                      ANDed.
+                                    items:
+                                      description: A label selector requirement is
+                                        a selector that contains values, a key, and
+                                        an operator that relates the key and values.
+                                      properties:
+                                        key:
+                                          description: key is the label key that the
+                                            selector applies to.
+                                          type: string
+                                        operator:
+                                          description: operator represents a key's
+                                            relationship to a set of values. Valid
+                                            operators are In, NotIn, Exists and DoesNotExist.
+                                          type: string
+                                        values:
+                                          description: values is an array of string
+                                            values. If the operator is In or NotIn,
+                                            the values array must be non-empty. If
+                                            the operator is Exists or DoesNotExist,
+                                            the values array must be empty. This array
+                                            is replaced during a strategic merge patch.
+                                          items:
+                                            type: string
+                                          type: array
+                                      required:
+                                      - key
+                                      - operator
+                                      type: object
+                                    type: array
+                                  matchLabels:
+                                    additionalProperties:
+                                      type: string
+                                    description: matchLabels is a map of {key,value}
+                                      pairs. A single {key,value} in the matchLabels
+                                      map is equivalent to an element of matchExpressions,
+                                      whose key field is "key", the operator is "In",
+                                      and the values array contains only "value".
+                                      The requirements are ANDed.
+                                    type: object
+                                type: object
+                                x-kubernetes-map-type: atomic
+                            type: object
+                          clientID:
+                            description: ClientID is the service principal client
+                              ID. Both User Assigned MSI and SP can use this field.
+                            type: string
+                          clientSecret:
+                            description: ClientSecret is a secret reference which
+                              should contain either a Service Principal password or
+                              certificate secret.
+                            properties:
+                              name:
+                                description: name is unique within a namespace to
+                                  reference a secret resource.
+                                type: string
+                              namespace:
+                                description: namespace defines the space within which
+                                  the secret name must be unique.
+                                type: string
+                            type: object
+                            x-kubernetes-map-type: atomic
+                          name:
+                            description: 'Name must be unique within a namespace.
+                              Is required when creating resources, although some resources
+                              may allow a client to request the generation of an appropriate
+                              name automatically. Name is primarily intended for creation
+                              idempotence and configuration definition. Cannot be
+                              updated. More info: http://kubernetes.io/docs/user-guide/identifiers#names'
+                            type: string
+                          resourceID:
+                            description: ResourceID is the Azure resource ID for the
+                              User Assigned MSI resource. Only applicable when type
+                              is UserAssignedMSI.
+                            type: string
+                          tenantID:
+                            description: TenantID is the service principal primary
+                              tenant id.
+                            type: string
+                          type:
+                            description: Type is the type of Azure Identity used.
+                              ServicePrincipal, ServicePrincipalCertificate, UserAssignedMSI
+                              or ManualServicePrincipal.
+                            enum:
+                            - ServicePrincipal
+                            - UserAssignedMSI
+                            - ManualServicePrincipal
+                            - ServicePrincipalCertificate
+                            type: string
+                        required:
+                        - clientID
+                        - tenantID
+                        - type
+                        type: object
+                      controlPlane:
+                        description: AzureManagedControlPlaneSpec defines the desired
+                          state of AzureManagedControlPlane.
+                        properties:
+                          identityRef:
+                            description: IdentityRef is a reference to a AzureClusterIdentity
+                              to be used when reconciling this cluster
+                            properties:
+                              apiVersion:
+                                description: API version of the referent.
+                                type: string
+                              fieldPath:
+                                description: 'If referring to a piece of an object
+                                  instead of an entire object, this string should
+                                  contain a valid JSON/Go field access statement,
+                                  such as desiredState.manifest.containers[2]. For
+                                  example, if the object reference is to a container
+                                  within a pod, this would take on a value like: "spec.containers{name}"
+                                  (where "name" refers to the name of the container
+                                  that triggered the event) or if no container name
+                                  is specified "spec.containers[2]" (container with
+                                  index 2 in this pod). This syntax is chosen only
+                                  to have some well-defined way of referencing a part
+                                  of an object. TODO: this design is not final and
+                                  this field is subject to change in the future.'
+                                type: string
+                              kind:
+                                description: 'Kind of the referent. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+                                type: string
+                              name:
+                                description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names'
+                                type: string
+                              namespace:
+                                description: 'Namespace of the referent. More info:
+                                  https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces/'
+                                type: string
+                              resourceVersion:
+                                description: 'Specific resourceVersion to which this
+                                  reference is made, if any. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#concurrency-control-and-consistency'
+                                type: string
+                              uid:
+                                description: 'UID of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#uids'
+                                type: string
+                            type: object
+                            x-kubernetes-map-type: atomic
+                          location:
+                            description: 'Location is a string matching one of the
+                              canonical Azure region names. Examples: "westus2", "eastus".'
+                            type: string
+                          resourceGroupName:
+                            description: ResourceGroupName is the name of the Azure
+                              resource group for this AKS Cluster.
+                            type: string
+                          sshPublicKey:
+                            description: SSHPublicKey is a string literal containing
+                              an ssh public key base64 encoded.
+                            type: string
+                          subscriptionID:
+                            description: SubscriptionID is the GUID of the Azure subscription
+                              to hold this cluster.
+                            type: string
+                          version:
+                            description: Version defines the desired Kubernetes version.
+                            minLength: 2
+                            type: string
+                        required:
+                        - location
+                        - resourceGroupName
+                        - sshPublicKey
+                        - version
+                        type: object
+                      fetchConfigUrl:
+                        type: string
+                      machinePools:
+                        items:
+                          properties:
+                            mode:
+                              description: 'Mode represents mode of an agent pool.
+                                Possible values include: System, User.'
+                              enum:
+                              - System
+                              - User
+                              type: string
+                            name:
+                              description: Name of the agent pool.
+                              type: string
+                            replicas:
+                              description: Number of desired machines.
+                              format: int32
+                              type: integer
+                            sku:
+                              description: SKU is the size of the VMs in the node
+                                pool.
+                              type: string
+                          required:
+                          - mode
+                          - sku
+                          type: object
+                        type: array
+                      managedCluster:
+                        description: AzureManagedClusterSpec defines the desired state
+                          of AzureManagedCluster.
+                        properties:
+                          controlPlaneEndpoint:
+                            description: ControlPlaneEndpoint represents the endpoint
+                              used to communicate with the control plane.
+                            properties:
+                              host:
+                                description: The hostname on which the API server
+                                  is serving.
+                                type: string
+                              port:
+                                description: The port on which the API server is serving.
+                                format: int32
+                                type: integer
+                            required:
+                            - host
+                            - port
+                            type: object
+                        type: object
+                      version:
+                        type: string
+                    required:
+                    - clusterIdentity
+                    - controlPlane
+                    - machinePools
+                    - managedCluster
+                    type: object
                   gcp:
                     properties:
                       controlPlane:
@@ -554,6 +813,24 @@ spec:
                     - cidrBlocks
                     type: object
                 type: object
+              gitHubSecretRef:
+                description: SecretKeySelector selects a key of a Secret.
+                properties:
+                  key:
+                    description: The key of the secret to select from.  Must be a
+                      valid secret key.
+                    type: string
+                  name:
+                    description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                      TODO: Add other useful fields. apiVersion, kind, uid?'
+                    type: string
+                  optional:
+                    description: Specify whether the Secret or its key must be defined
+                    type: boolean
+                required:
+                - key
+                type: object
+                x-kubernetes-map-type: atomic
               kubernetesVersion:
                 type: string
               skipClusterCreation:
@@ -564,6 +841,7 @@ spec:
             - clusterAPI
             - clusterName
             - clusterNetwork
+            - gitHubSecretRef
             - kubernetesVersion
             type: object
           status:

@@ -18,6 +18,7 @@ import (
 	awsinfrastructure "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 	awscontrolplane "sigs.k8s.io/cluster-api-provider-aws/v2/controlplane/eks/api/v1beta2"
 	awsmachinepool "sigs.k8s.io/cluster-api-provider-aws/v2/exp/api/v1beta2"
+	azurecontroleplane "sigs.k8s.io/cluster-api-provider-azure/api/v1beta1"
 	gcpmanagedcluster "sigs.k8s.io/cluster-api-provider-gcp/exp/api/v1beta1"
 	clusterapi "sigs.k8s.io/cluster-api/api/v1beta1"
 	clusterapiexp "sigs.k8s.io/cluster-api/exp/api/v1beta1"
@@ -980,6 +981,154 @@ func ReconcileCustomResourceDefinitions(ctx context.Context, namedGetters []Name
 
 		if err := EnsureNamedObject(ctx, types.NamespacedName{Namespace: namespace, Name: name}, createObject, client, &apiextensionsv1.CustomResourceDefinition{}, false); err != nil {
 			return fmt.Errorf("failed to ensure CustomResourceDefinition %s/%s: %w", namespace, name, err)
+		}
+	}
+
+	return nil
+}
+
+// AzureManagedControlPlaneCreator defines an interface to create/update AzureManagedControlPlanes
+type AzureManagedControlPlaneCreator = func(existing *azurecontroleplane.AzureManagedControlPlane) (*azurecontroleplane.AzureManagedControlPlane, error)
+
+// NamedAzureManagedControlPlaneCreatorGetter returns the name of the resource and the corresponding creator function
+type NamedAzureManagedControlPlaneCreatorGetter = func() (name string, create AzureManagedControlPlaneCreator)
+
+// AzureManagedControlPlaneObjectWrapper adds a wrapper so the AzureManagedControlPlaneCreator matches ObjectCreator.
+// This is needed as Go does not support function interface matching.
+func AzureManagedControlPlaneObjectWrapper(create AzureManagedControlPlaneCreator) ObjectCreator {
+	return func(existing ctrlruntimeclient.Object) (ctrlruntimeclient.Object, error) {
+		if existing != nil {
+			return create(existing.(*azurecontroleplane.AzureManagedControlPlane))
+		}
+		return create(&azurecontroleplane.AzureManagedControlPlane{})
+	}
+}
+
+// ReconcileAzureManagedControlPlanes will create and update the AzureManagedControlPlanes coming from the passed AzureManagedControlPlaneCreator slice
+func ReconcileAzureManagedControlPlanes(ctx context.Context, namedGetters []NamedAzureManagedControlPlaneCreatorGetter, namespace string, client ctrlruntimeclient.Client, objectModifiers ...ObjectModifier) error {
+	for _, get := range namedGetters {
+		name, create := get()
+		createObject := AzureManagedControlPlaneObjectWrapper(create)
+		createObject = createWithNamespace(createObject, namespace)
+		createObject = createWithName(createObject, name)
+
+		for _, objectModifier := range objectModifiers {
+			createObject = objectModifier(createObject)
+		}
+
+		if err := EnsureNamedObject(ctx, types.NamespacedName{Namespace: namespace, Name: name}, createObject, client, &azurecontroleplane.AzureManagedControlPlane{}, false); err != nil {
+			return fmt.Errorf("failed to ensure AzureManagedControlPlane %s/%s: %w", namespace, name, err)
+		}
+	}
+
+	return nil
+}
+
+// AzureManagedClusterCreator defines an interface to create/update AzureManagedClusters
+type AzureManagedClusterCreator = func(existing *azurecontroleplane.AzureManagedCluster) (*azurecontroleplane.AzureManagedCluster, error)
+
+// NamedAzureManagedClusterCreatorGetter returns the name of the resource and the corresponding creator function
+type NamedAzureManagedClusterCreatorGetter = func() (name string, create AzureManagedClusterCreator)
+
+// AzureManagedClusterObjectWrapper adds a wrapper so the AzureManagedClusterCreator matches ObjectCreator.
+// This is needed as Go does not support function interface matching.
+func AzureManagedClusterObjectWrapper(create AzureManagedClusterCreator) ObjectCreator {
+	return func(existing ctrlruntimeclient.Object) (ctrlruntimeclient.Object, error) {
+		if existing != nil {
+			return create(existing.(*azurecontroleplane.AzureManagedCluster))
+		}
+		return create(&azurecontroleplane.AzureManagedCluster{})
+	}
+}
+
+// ReconcileAzureManagedClusters will create and update the AzureManagedClusters coming from the passed AzureManagedClusterCreator slice
+func ReconcileAzureManagedClusters(ctx context.Context, namedGetters []NamedAzureManagedClusterCreatorGetter, namespace string, client ctrlruntimeclient.Client, objectModifiers ...ObjectModifier) error {
+	for _, get := range namedGetters {
+		name, create := get()
+		createObject := AzureManagedClusterObjectWrapper(create)
+		createObject = createWithNamespace(createObject, namespace)
+		createObject = createWithName(createObject, name)
+
+		for _, objectModifier := range objectModifiers {
+			createObject = objectModifier(createObject)
+		}
+
+		if err := EnsureNamedObject(ctx, types.NamespacedName{Namespace: namespace, Name: name}, createObject, client, &azurecontroleplane.AzureManagedCluster{}, false); err != nil {
+			return fmt.Errorf("failed to ensure AzureManagedCluster %s/%s: %w", namespace, name, err)
+		}
+	}
+
+	return nil
+}
+
+// AzureManagedMachinePoolCreator defines an interface to create/update AzureManagedMachinePools
+type AzureManagedMachinePoolCreator = func(existing *azurecontroleplane.AzureManagedMachinePool) (*azurecontroleplane.AzureManagedMachinePool, error)
+
+// NamedAzureManagedMachinePoolCreatorGetter returns the name of the resource and the corresponding creator function
+type NamedAzureManagedMachinePoolCreatorGetter = func() (name string, create AzureManagedMachinePoolCreator)
+
+// AzureManagedMachinePoolObjectWrapper adds a wrapper so the AzureManagedMachinePoolCreator matches ObjectCreator.
+// This is needed as Go does not support function interface matching.
+func AzureManagedMachinePoolObjectWrapper(create AzureManagedMachinePoolCreator) ObjectCreator {
+	return func(existing ctrlruntimeclient.Object) (ctrlruntimeclient.Object, error) {
+		if existing != nil {
+			return create(existing.(*azurecontroleplane.AzureManagedMachinePool))
+		}
+		return create(&azurecontroleplane.AzureManagedMachinePool{})
+	}
+}
+
+// ReconcileAzureManagedMachinePools will create and update the AzureManagedMachinePools coming from the passed AzureManagedMachinePoolCreator slice
+func ReconcileAzureManagedMachinePools(ctx context.Context, namedGetters []NamedAzureManagedMachinePoolCreatorGetter, namespace string, client ctrlruntimeclient.Client, objectModifiers ...ObjectModifier) error {
+	for _, get := range namedGetters {
+		name, create := get()
+		createObject := AzureManagedMachinePoolObjectWrapper(create)
+		createObject = createWithNamespace(createObject, namespace)
+		createObject = createWithName(createObject, name)
+
+		for _, objectModifier := range objectModifiers {
+			createObject = objectModifier(createObject)
+		}
+
+		if err := EnsureNamedObject(ctx, types.NamespacedName{Namespace: namespace, Name: name}, createObject, client, &azurecontroleplane.AzureManagedMachinePool{}, false); err != nil {
+			return fmt.Errorf("failed to ensure AzureManagedMachinePool %s/%s: %w", namespace, name, err)
+		}
+	}
+
+	return nil
+}
+
+// AzureClusterIdentityCreator defines an interface to create/update AzureClusterIdentitys
+type AzureClusterIdentityCreator = func(existing *azurecontroleplane.AzureClusterIdentity) (*azurecontroleplane.AzureClusterIdentity, error)
+
+// NamedAzureClusterIdentityCreatorGetter returns the name of the resource and the corresponding creator function
+type NamedAzureClusterIdentityCreatorGetter = func() (name string, create AzureClusterIdentityCreator)
+
+// AzureClusterIdentityObjectWrapper adds a wrapper so the AzureClusterIdentityCreator matches ObjectCreator.
+// This is needed as Go does not support function interface matching.
+func AzureClusterIdentityObjectWrapper(create AzureClusterIdentityCreator) ObjectCreator {
+	return func(existing ctrlruntimeclient.Object) (ctrlruntimeclient.Object, error) {
+		if existing != nil {
+			return create(existing.(*azurecontroleplane.AzureClusterIdentity))
+		}
+		return create(&azurecontroleplane.AzureClusterIdentity{})
+	}
+}
+
+// ReconcileAzureClusterIdentitys will create and update the AzureClusterIdentitys coming from the passed AzureClusterIdentityCreator slice
+func ReconcileAzureClusterIdentitys(ctx context.Context, namedGetters []NamedAzureClusterIdentityCreatorGetter, namespace string, client ctrlruntimeclient.Client, objectModifiers ...ObjectModifier) error {
+	for _, get := range namedGetters {
+		name, create := get()
+		createObject := AzureClusterIdentityObjectWrapper(create)
+		createObject = createWithNamespace(createObject, namespace)
+		createObject = createWithName(createObject, name)
+
+		for _, objectModifier := range objectModifiers {
+			createObject = objectModifier(createObject)
+		}
+
+		if err := EnsureNamedObject(ctx, types.NamespacedName{Namespace: namespace, Name: name}, createObject, client, &azurecontroleplane.AzureClusterIdentity{}, false); err != nil {
+			return fmt.Errorf("failed to ensure AzureClusterIdentity %s/%s: %w", namespace, name, err)
 		}
 	}
 

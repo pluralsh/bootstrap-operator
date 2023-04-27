@@ -1,4 +1,6 @@
 # Binaries for programs and plugins
+bin/
+__debug_bin
 *.exe
 *.exe~
 *.dll
@@ -14,5 +16,9 @@
 # Dependency directories (remove the comment below to include it)
 # vendor/
 
-bin/
+# IDE-speficic files
 .idea/
+.vscode/
+
+# OS-specific files
+.DS_Store
