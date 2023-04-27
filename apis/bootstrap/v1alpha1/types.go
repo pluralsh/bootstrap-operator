@@ -122,12 +122,19 @@ type AzureCloudSpec struct {
 	ClusterIdentity         AzureClusterIdentity                `json:"clusterIdentity"`
 	ManagedCluster          *azure.AzureManagedClusterSpec      `json:"managedCluster"`
 	ControlPlane            *azure.AzureManagedControlPlaneSpec `json:"controlPlane"`
+	MachinePools            []*AzureMachinePool                `json:"machinePools"`
 }
 
 type AzureClusterIdentity struct {
-	azure.AzureClusterIdentitySpec `json:",inline"`
 	Name                           string `json:"name"`
-	Namespace                      string `json:"namespace"`
+	azure.AzureClusterIdentitySpec `json:",inline"`
+}
+
+type AzureMachinePool struct {
+	Name     string `json:"name"`
+	Replicas *int32 `json:"replicas"`
+	Mode     string `json:"mode"`
+	SKU      string `json:"sku"`
 }
 
 type GCPMachinePoolSpec struct {

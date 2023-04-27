@@ -328,8 +328,6 @@ spec:
                             x-kubernetes-map-type: atomic
                           name:
                             type: string
-                          namespace:
-                            type: string
                           resourceID:
                             description: ResourceID is the Azure resource ID for the
                               User Assigned MSI resource. Only applicable when type
@@ -352,7 +350,6 @@ spec:
                         required:
                         - clientID
                         - name
-                        - namespace
                         - tenantID
                         - type
                         type: object
@@ -862,6 +859,25 @@ spec:
                         type: object
                       fetchConfigUrl:
                         type: string
+                      machinePools:
+                        items:
+                          properties:
+                            mode:
+                              type: string
+                            name:
+                              type: string
+                            replicas:
+                              format: int32
+                              type: integer
+                            sku:
+                              type: string
+                          required:
+                          - mode
+                          - name
+                          - replicas
+                          - sku
+                          type: object
+                        type: array
                       managedCluster:
                         description: AzureManagedClusterSpec defines the desired state
                           of AzureManagedCluster.
@@ -888,6 +904,7 @@ spec:
                     required:
                     - clusterIdentity
                     - controlPlane
+                    - machinePools
                     - managedCluster
                     type: object
                   gcp:

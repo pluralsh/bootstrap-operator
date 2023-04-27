@@ -16,7 +16,7 @@ import (
 	"github.com/pluralsh/bootstrap-operator/apis/bootstrap/helper"
 	bv1alpha1 "github.com/pluralsh/bootstrap-operator/apis/bootstrap/v1alpha1"
 	"github.com/pluralsh/bootstrap-operator/pkg/resources"
-	"github.com/pluralsh/bootstrap-operator/pkg/resources/reconciling"
+	r "github.com/pluralsh/bootstrap-operator/pkg/resources/reconciling"
 )
 
 type AzureProvider struct {
@@ -36,7 +36,7 @@ func GetAzureProvider(data *resources.TemplateData) (*AzureProvider, error) {
 
 	var secret corev1.Secret
 	if err := data.Client.Get(data.Ctx, ctrlruntimeclient.ObjectKey{
-		Namespace: data.Namespace, Name: spec.GitHubSecretRef.Name}, &secret); err != nil {
+		Namespace: data.Bootstrap.Namespace, Name: spec.GitHubSecretRef.Name}, &secret); err != nil {
 		return nil, err
 	}
 	gitHubToken := strings.TrimSpace(string(secret.Data[spec.GitHubSecretRef.Key]))
@@ -65,7 +65,7 @@ func (azure *AzureProvider) FetchConfigURL() string {
 func (azure *AzureProvider) createCredentialSecret() error {
 	secret := corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
-			Namespace: azure.Data.Namespace,
+			Namespace: azure.Data.Bootstrap.Namespace,
 			Name:      azureSecretName,
 		},
 		Data: map[string][]byte{
@@ -123,7 +123,7 @@ func (azure *AzureProvider) Secret() string {
 func (azure *AzureProvider) CheckCluster() (*ctrl.Result, error) {
 	var cluster clusterv1.Cluster
 	if err := azure.Data.Client.Get(azure.Data.Ctx, ctrlruntimeclient.ObjectKey{
-		Namespace: azure.Data.Namespace,
+		Namespace: azure.Data.Bootstrap.Namespace,
 		Name:      azure.Data.Bootstrap.Spec.ClusterName}, &cluster); err != nil {
 		return nil, err
 	}
@@ -169,58 +169,59 @@ func (azure *AzureProvider) updateClusterStatus(status clusterv1.ClusterStatus) 
 }
 
 func (azure *AzureProvider) ReconcileCluster() error {
-	clusterIdentityCreator := []reconciling.NamedAzureClusterIdentityCreatorGetter{
+	ctx := azure.Data.Ctx
+	client := azure.Data.Client
+	namespace := azure.Data.Bootstrap.Namespace
+
+	clusterIdentityCreator := []r.NamedAzureClusterIdentityCreatorGetter{
 		azureClusterIdentityCreator(azure.Data),
 	}
-	if err := reconciling.ReconcileAzureClusterIdentitys(azure.Data.Ctx, clusterIdentityCreator, azure.Data.Namespace, azure.Data.Client); err != nil {
+	if err := r.ReconcileAzureClusterIdentitys(ctx, clusterIdentityCreator, namespace, client); err != nil {
 		return err
 	}
 
-	clusterCreator := []reconciling.NamedClusterCreatorGetter{
+	clusterCreator := []r.NamedClusterCreatorGetter{
 		azureClusterCreator(azure.Data),
 	}
-	if err := reconciling.ReconcileClusters(azure.Data.Ctx, clusterCreator, azure.Data.Namespace, azure.Data.Client); err != nil {
+	if err := r.ReconcileClusters(ctx, clusterCreator, namespace, client); err != nil {
 		return err
 	}
 
-	managedClusterCreator := []reconciling.NamedAzureManagedClusterCreatorGetter{
+	managedClusterCreator := []r.NamedAzureManagedClusterCreatorGetter{
 		azureManagedClusterCreator(azure.Data),
 	}
-	if err := reconciling.ReconcileAzureManagedClusters(azure.Data.Ctx, managedClusterCreator, azure.Data.Namespace, azure.Data.Client); err != nil {
+	if err := r.ReconcileAzureManagedClusters(ctx, managedClusterCreator, namespace, client); err != nil {
 		return err
 	}
 
-	managedControlPlaneCreator := []reconciling.NamedAzureManagedControlPlaneCreatorGetter{
+	managedControlPlaneCreator := []r.NamedAzureManagedControlPlaneCreatorGetter{
 		azureManageControlPlaneCreator(azure.Data),
 	}
-	if err := reconciling.ReconcileAzureManagedControlPlanes(azure.Data.Ctx, managedControlPlaneCreator, azure.Data.Namespace, azure.Data.Client); err != nil {
+	if err := r.ReconcileAzureManagedControlPlanes(ctx, managedControlPlaneCreator, namespace, client); err != nil {
 		return err
 	}
 
-	// TODO: At the moment only one machine pool with one respective managed machine pool will be created.
-	// In the future it should be possible to specify multiple machine pools at the cloud spec level.
-	machinePoolCreator := []reconciling.NamedMachinePoolCreatorGetter{
-		azureMachinePoolCreator(azure.Data),
+	machinePoolCreator := []r.NamedMachinePoolCreatorGetter{}
+	managedMachinePoolCreator := []r.NamedAzureManagedMachinePoolCreatorGetter{}
+	for _, machinePool := range azure.Data.Bootstrap.Spec.CloudSpec.Azure.MachinePools {
+		machinePoolCreator = append(machinePoolCreator, azureMachinePoolCreator(machinePool, azure.Data))
+		managedMachinePoolCreator = append(managedMachinePoolCreator, azureManagedMachinePoolCreator(machinePool, azure.Data))
 	}
-	if err := reconciling.ReconcileMachinePools(azure.Data.Ctx, machinePoolCreator, azure.Data.Namespace, azure.Data.Client); err != nil {
+	if err := r.ReconcileMachinePools(ctx, machinePoolCreator, namespace, client); err != nil {
 		return err
 	}
-
-	managedMachinePoolCreator := []reconciling.NamedAzureManagedMachinePoolCreatorGetter{
-		azureManagedMachinePoolCreator(azure.Data),
-	}
-	if err := reconciling.ReconcileAzureManagedMachinePools(azure.Data.Ctx, managedMachinePoolCreator, azure.Data.Namespace, azure.Data.Client); err != nil {
+	if err := r.ReconcileAzureManagedMachinePools(ctx, managedMachinePoolCreator, namespace, client); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func azureClusterIdentityCreator(data *resources.TemplateData) reconciling.NamedAzureClusterIdentityCreatorGetter {
-	return func() (string, reconciling.AzureClusterIdentityCreator) {
+func azureClusterIdentityCreator(data *resources.TemplateData) r.NamedAzureClusterIdentityCreatorGetter {
+	return func() (string, r.AzureClusterIdentityCreator) {
 		return data.Bootstrap.Spec.CloudSpec.Azure.ClusterIdentity.Name, func(c *azure.AzureClusterIdentity) (*azure.AzureClusterIdentity, error) {
 			c.Name = data.Bootstrap.Spec.CloudSpec.Azure.ClusterIdentity.Name
-			c.Namespace = data.Namespace
+			c.Namespace = data.Bootstrap.Namespace
 			c.Spec = data.Bootstrap.Spec.CloudSpec.Azure.ClusterIdentity.AzureClusterIdentitySpec
 
 			return c, nil
@@ -228,12 +229,12 @@ func azureClusterIdentityCreator(data *resources.TemplateData) reconciling.Named
 	}
 }
 
-func azureClusterCreator(data *resources.TemplateData) reconciling.NamedClusterCreatorGetter {
-	return func() (string, reconciling.ClusterCreator) {
+func azureClusterCreator(data *resources.TemplateData) r.NamedClusterCreatorGetter {
+	return func() (string, r.ClusterCreator) {
 		return data.Bootstrap.Spec.ClusterName, func(c *clusterv1.Cluster) (*clusterv1.Cluster, error) {
 			name := data.Bootstrap.Spec.ClusterName
 			c.Name = name
-			c.Namespace = data.Namespace
+			c.Namespace = data.Bootstrap.Namespace
 			c.Spec = clusterv1.ClusterSpec{
 				ClusterNetwork: &clusterv1.ClusterNetwork{
 					APIServerPort: data.Bootstrap.Spec.ClusterNetwork.APIServerPort,
@@ -266,11 +267,11 @@ func azureClusterCreator(data *resources.TemplateData) reconciling.NamedClusterC
 	}
 }
 
-func azureManagedClusterCreator(data *resources.TemplateData) reconciling.NamedAzureManagedClusterCreatorGetter {
-	return func() (string, reconciling.AzureManagedClusterCreator) {
+func azureManagedClusterCreator(data *resources.TemplateData) r.NamedAzureManagedClusterCreatorGetter {
+	return func() (string, r.AzureManagedClusterCreator) {
 		return data.Bootstrap.Spec.ClusterName, func(c *azure.AzureManagedCluster) (*azure.AzureManagedCluster, error) {
 			c.Name = data.Bootstrap.Spec.ClusterName
-			c.Namespace = data.Namespace
+			c.Namespace = data.Bootstrap.Namespace
 			c.Spec = *data.Bootstrap.Spec.CloudSpec.Azure.ManagedCluster
 
 			return c, nil
@@ -278,11 +279,11 @@ func azureManagedClusterCreator(data *resources.TemplateData) reconciling.NamedA
 	}
 }
 
-func azureManageControlPlaneCreator(data *resources.TemplateData) reconciling.NamedAzureManagedControlPlaneCreatorGetter {
-	return func() (string, reconciling.AzureManagedControlPlaneCreator) {
+func azureManageControlPlaneCreator(data *resources.TemplateData) r.NamedAzureManagedControlPlaneCreatorGetter {
+	return func() (string, r.AzureManagedControlPlaneCreator) {
 		return fmt.Sprintf("%s-%s", data.Bootstrap.Spec.ClusterName, "control-plane"), func(c *azure.AzureManagedControlPlane) (*azure.AzureManagedControlPlane, error) {
 			c.Name = fmt.Sprintf("%s-%s", data.Bootstrap.Spec.ClusterName, "control-plane")
-			c.Namespace = data.Namespace
+			c.Namespace = data.Bootstrap.Namespace
 			c.Spec = *data.Bootstrap.Spec.CloudSpec.Azure.ControlPlane
 
 			if len(data.Bootstrap.Spec.KubernetesVersion) > 0 {
@@ -294,15 +295,14 @@ func azureManageControlPlaneCreator(data *resources.TemplateData) reconciling.Na
 	}
 }
 
-func azureMachinePoolCreator(data *resources.TemplateData) reconciling.NamedMachinePoolCreatorGetter {
-	return func() (string, reconciling.MachinePoolCreator) {
-		return "pool0", func(c *clusterapiexp.MachinePool) (*clusterapiexp.MachinePool, error) {
-			name := "pool0"
-			c.Name = name
-			c.Namespace = data.Namespace
+func azureMachinePoolCreator(machinePool *bv1alpha1.AzureMachinePool, data *resources.TemplateData) r.NamedMachinePoolCreatorGetter {
+	return func() (string, r.MachinePoolCreator) {
+		return machinePool.Name, func(c *clusterapiexp.MachinePool) (*clusterapiexp.MachinePool, error) {
+			c.Name = machinePool.Name
+			c.Namespace = data.Bootstrap.Namespace
 			c.Spec = clusterapiexp.MachinePoolSpec{
 				ClusterName: data.Bootstrap.Spec.ClusterName,
-				Replicas:    resources.Int32(3),
+				Replicas:    machinePool.Replicas,
 				Template: clusterv1.MachineTemplateSpec{
 					Spec: clusterv1.MachineSpec{
 						Bootstrap: clusterv1.Bootstrap{
@@ -311,7 +311,7 @@ func azureMachinePoolCreator(data *resources.TemplateData) reconciling.NamedMach
 						ClusterName: data.Bootstrap.Spec.ClusterName,
 						InfrastructureRef: corev1.ObjectReference{
 							Kind:       "AzureManagedMachinePool",
-							Name:       name,
+							Name:       machinePool.Name,
 							APIVersion: "infrastructure.cluster.x-k8s.io/v1beta1",
 						},
 					},
@@ -322,15 +322,15 @@ func azureMachinePoolCreator(data *resources.TemplateData) reconciling.NamedMach
 	}
 }
 
-func azureManagedMachinePoolCreator(data *resources.TemplateData) reconciling.NamedAzureManagedMachinePoolCreatorGetter {
-	return func() (string, reconciling.AzureManagedMachinePoolCreator) {
-		return "pool0", func(c *azure.AzureManagedMachinePool) (*azure.AzureManagedMachinePool, error) {
-			c.Name = "pool0"
-			c.Namespace = data.Namespace
+func azureManagedMachinePoolCreator(machinePool *bv1alpha1.AzureMachinePool, data *resources.TemplateData) r.NamedAzureManagedMachinePoolCreatorGetter {
+	return func() (string, r.AzureManagedMachinePoolCreator) {
+		return machinePool.Name, func(c *azure.AzureManagedMachinePool) (*azure.AzureManagedMachinePool, error) {
+			c.Name = machinePool.Name
+			c.Namespace = data.Bootstrap.Namespace
 			c.Spec = azure.AzureManagedMachinePoolSpec{
-				Mode: "System",
-				Name: resources.StrPtr("pool0"),
-				SKU:  "Standard_D2s_v3",
+				Name: &machinePool.Name,
+				Mode: machinePool.Mode,
+				SKU:  machinePool.SKU,
 			}
 
 			return c, nil
