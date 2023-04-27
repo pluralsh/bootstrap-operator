@@ -220,9 +220,21 @@ func (azure *AzureProvider) ReconcileCluster() error {
 func azureClusterIdentityCreator(data *resources.TemplateData) r.NamedAzureClusterIdentityCreatorGetter {
 	return func() (string, r.AzureClusterIdentityCreator) {
 		return data.Bootstrap.Spec.CloudSpec.Azure.ClusterIdentity.Name, func(c *azure.AzureClusterIdentity) (*azure.AzureClusterIdentity, error) {
-			c.Name = data.Bootstrap.Spec.CloudSpec.Azure.ClusterIdentity.Name
+			identity := data.Bootstrap.Spec.CloudSpec.Azure.ClusterIdentity
+
+			c.Name = identity.Name
 			c.Namespace = data.Bootstrap.Namespace
-			c.Spec = data.Bootstrap.Spec.CloudSpec.Azure.ClusterIdentity.AzureClusterIdentitySpec
+			c.Spec = azure.AzureClusterIdentitySpec{
+				Type:         azure.IdentityType(identity.Type),
+				ResourceID:   identity.ResourceID,
+				ClientID:     identity.ClientID,
+				ClientSecret: identity.ClientSecret,
+				TenantID:     identity.TenantID,
+				AllowedNamespaces: &azure.AllowedNamespaces{
+					NamespaceList: identity.AllowedNamespaces.NamespaceList,
+					Selector:      identity.AllowedNamespaces.Selector,
+				},
+			}
 
 			return c, nil
 		}
@@ -270,9 +282,13 @@ func azureClusterCreator(data *resources.TemplateData) r.NamedClusterCreatorGett
 func azureManagedClusterCreator(data *resources.TemplateData) r.NamedAzureManagedClusterCreatorGetter {
 	return func() (string, r.AzureManagedClusterCreator) {
 		return data.Bootstrap.Spec.ClusterName, func(c *azure.AzureManagedCluster) (*azure.AzureManagedCluster, error) {
+			cluster := data.Bootstrap.Spec.CloudSpec.Azure.ManagedCluster
+
 			c.Name = data.Bootstrap.Spec.ClusterName
 			c.Namespace = data.Bootstrap.Namespace
-			c.Spec = *data.Bootstrap.Spec.CloudSpec.Azure.ManagedCluster
+			c.Spec = azure.AzureManagedClusterSpec{
+				ControlPlaneEndpoint: clusterv1.APIEndpoint(cluster.ControlPlaneEndpoint),
+			}
 
 			return c, nil
 		}
@@ -282,9 +298,18 @@ func azureManagedClusterCreator(data *resources.TemplateData) r.NamedAzureManage
 func azureManageControlPlaneCreator(data *resources.TemplateData) r.NamedAzureManagedControlPlaneCreatorGetter {
 	return func() (string, r.AzureManagedControlPlaneCreator) {
 		return fmt.Sprintf("%s-%s", data.Bootstrap.Spec.ClusterName, "control-plane"), func(c *azure.AzureManagedControlPlane) (*azure.AzureManagedControlPlane, error) {
+			controlPlane := data.Bootstrap.Spec.CloudSpec.Azure.ControlPlane
+
 			c.Name = fmt.Sprintf("%s-%s", data.Bootstrap.Spec.ClusterName, "control-plane")
 			c.Namespace = data.Bootstrap.Namespace
-			c.Spec = *data.Bootstrap.Spec.CloudSpec.Azure.ControlPlane
+			c.Spec = azure.AzureManagedControlPlaneSpec{
+				Version:           controlPlane.Version,
+				ResourceGroupName: controlPlane.ResourceGroupName,
+				SubscriptionID:    controlPlane.SubscriptionID,
+				Location:          controlPlane.Location,
+				SSHPublicKey:      controlPlane.SSHPublicKey,
+				IdentityRef:       controlPlane.IdentityRef,
+			}
 
 			if len(data.Bootstrap.Spec.KubernetesVersion) > 0 {
 				c.Spec.Version = data.Bootstrap.Spec.KubernetesVersion

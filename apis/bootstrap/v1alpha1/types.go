@@ -4,7 +4,6 @@ import (
 	"strings"
 
 	api "github.com/weaveworks/eksctl/pkg/apis/eksctl.io/v1alpha5"
-	azure "sigs.k8s.io/cluster-api-provider-azure/api/v1beta1"
 	gcpexpv1beta1 "sigs.k8s.io/cluster-api-provider-gcp/exp/api/v1beta1"
 	"sigs.k8s.io/cluster-api/exp/api/v1beta1"
 
@@ -115,26 +114,6 @@ type AWSCloudSpec struct {
 	AccessKeyIDRef     corev1.SecretKeySelector `json:"accessKeyIdRef"`
 	SecretAccessKeyRef corev1.SecretKeySelector `json:"secretAccessKeyRef"`
 	SessionTokenRef    corev1.SecretKeySelector `json:"sessionTokenRef"`
-}
-
-type AzureCloudSpec struct {
-	ClusterAPIComponentSpec `json:",inline"`
-	ClusterIdentity         AzureClusterIdentity                `json:"clusterIdentity"`
-	ManagedCluster          *azure.AzureManagedClusterSpec      `json:"managedCluster"`
-	ControlPlane            *azure.AzureManagedControlPlaneSpec `json:"controlPlane"`
-	MachinePools            []*AzureMachinePool                `json:"machinePools"`
-}
-
-type AzureClusterIdentity struct {
-	Name                           string `json:"name"`
-	azure.AzureClusterIdentitySpec `json:",inline"`
-}
-
-type AzureMachinePool struct {
-	Name     string `json:"name"`
-	Replicas *int32 `json:"replicas"`
-	Mode     string `json:"mode"`
-	SKU      string `json:"sku"`
 }
 
 type GCPMachinePoolSpec struct {
@@ -312,4 +291,12 @@ type BootstrapList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []Bootstrap `json:"items"`
+}
+
+type APIEndpoint struct {
+	// The hostname on which the API server is serving.
+	Host string `json:"host"`
+
+	// The port on which the API server is serving.
+	Port int32 `json:"port"`
 }
