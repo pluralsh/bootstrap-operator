@@ -265,7 +265,7 @@ func azureClusterCreator(data *resources.TemplateData) r.NamedClusterCreatorGett
 			}
 			c.Spec.ControlPlaneRef = &corev1.ObjectReference{
 				Kind:       "AzureManagedControlPlane",
-				Name:       fmt.Sprintf("%s-%s", name, "control-plane"),
+				Name:       name,
 				APIVersion: "infrastructure.cluster.x-k8s.io/v1beta1",
 			}
 			c.Spec.InfrastructureRef = &corev1.ObjectReference{
