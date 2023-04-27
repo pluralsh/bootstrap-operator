@@ -297,10 +297,10 @@ func azureManagedClusterCreator(data *resources.TemplateData) r.NamedAzureManage
 
 func azureManageControlPlaneCreator(data *resources.TemplateData) r.NamedAzureManagedControlPlaneCreatorGetter {
 	return func() (string, r.AzureManagedControlPlaneCreator) {
-		return fmt.Sprintf("%s-%s", data.Bootstrap.Spec.ClusterName, "control-plane"), func(c *azure.AzureManagedControlPlane) (*azure.AzureManagedControlPlane, error) {
+		return data.Bootstrap.Spec.ClusterName, func(c *azure.AzureManagedControlPlane) (*azure.AzureManagedControlPlane, error) {
 			controlPlane := data.Bootstrap.Spec.CloudSpec.Azure.ControlPlane
 
-			c.Name = fmt.Sprintf("%s-%s", data.Bootstrap.Spec.ClusterName, "control-plane")
+			c.Name = data.Bootstrap.Spec.ClusterName
 			c.Namespace = data.Bootstrap.Namespace
 			c.Spec = azure.AzureManagedControlPlaneSpec{
 				Version:           controlPlane.Version,
