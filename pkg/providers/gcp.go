@@ -1,14 +1,22 @@
 package providers
 
 import (
+	"context"
 	"encoding/base64"
 	"fmt"
 	"strings"
 	"time"
 
+	cloudcontainer "cloud.google.com/go/container/apiv1"
+	container "cloud.google.com/go/container/apiv1/containerpb"
+	"github.com/pluralsh/polly/algorithms"
+	"google.golang.org/api/option"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	gcpclusterapi "sigs.k8s.io/cluster-api-provider-gcp/exp/api/v1beta1"
+	"k8s.io/client-go/pkg/version"
+	"sigs.k8s.io/cluster-api-provider-gcp/api/v1beta1"
+	gcpclusterapi "sigs.k8s.io/cluster-api-provider-gcp/api/v1beta1"
+	expgcpclusterapi "sigs.k8s.io/cluster-api-provider-gcp/exp/api/v1beta1"
 	clusterapi "sigs.k8s.io/cluster-api/api/v1beta1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	clusterapiexp "sigs.k8s.io/cluster-api/exp/api/v1beta1"
@@ -27,6 +35,7 @@ type GCPProvider struct {
 	Region         string
 	version        string
 	fetchConfigUrl string
+	gcpClient      *cloudcontainer.ClusterManagerClient
 }
 
 const (
@@ -106,22 +115,44 @@ func (gcp *GCPProvider) Secret() string {
 }
 
 func (gcp *GCPProvider) CheckCluster() (*ctrl.Result, error) {
-	var cluster clusterapi.Cluster
-	if err := gcp.Data.Client.Get(gcp.Data.Ctx, ctrlruntimeclient.ObjectKey{Namespace: gcp.Data.Namespace, Name: gcp.Data.Bootstrap.Spec.ClusterName}, &cluster); err != nil {
+	cluster := new(clusterapi.Cluster)
+	if err := gcp.Data.Client.Get(gcp.Data.Ctx, ctrlruntimeclient.ObjectKey{Namespace: gcp.Data.Namespace, Name: gcp.Data.Bootstrap.Spec.ClusterName}, cluster); err != nil {
 		return nil, err
 	}
+
 	if err := gcp.updateClusterStatus(cluster.Status); err != nil {
 		return nil, err
 	}
-	for _, cond := range cluster.Status.Conditions {
-		if cond.Type == clusterv1.ReadyCondition && cond.Status == corev1.ConditionTrue {
-			return nil, gcp.setStatusReady()
-		}
+
+	status, err := gcp.getClusterReadyStatus(cluster.Status)
+	if err != nil {
+		return nil, err
 	}
-	gcp.Data.Log.Named("GCP provider").Info("Waiting for GCP cluster to become ready")
-	return &ctrl.Result{
-		RequeueAfter: 10 * time.Second,
-	}, nil
+
+	if *status != corev1.ConditionTrue {
+		gcp.Data.Log.Named("GCP provider").Info("Waiting for cluster to become ready...")
+		return &ctrl.Result{RequeueAfter: 10 * time.Second}, nil
+	}
+
+	gcp.Data.Log.Named("GCP provider").Info("Cluster provisioned. Running preflight checks...")
+	if res, err := gcp.runClusterPreflightChecks(); err != nil || res != nil {
+		return res, err
+	}
+
+	gcp.Data.Log.Named("GCP provider").Info("Updating cluster object Ready status to true")
+	return nil, gcp.setStatusReady()
+}
+
+func (gcp *GCPProvider) getClusterReadyStatus(status clusterapi.ClusterStatus) (*corev1.ConditionStatus, error) {
+	matchingConditions := algorithms.Filter(status.Conditions, func(condition clusterv1.Condition) bool {
+		return condition.Type == clusterv1.ReadyCondition
+	})
+
+	if len(matchingConditions) != 1 {
+		return nil, fmt.Errorf("could not find cluster Ready condition")
+	}
+
+	return &matchingConditions[0].Status, nil
 }
 
 func (gcp *GCPProvider) setStatusReady() error {
@@ -152,35 +183,36 @@ func (gcp *GCPProvider) updateClusterStatus(status clusterapi.ClusterStatus) err
 }
 
 func (gcp *GCPProvider) ReconcileCluster() error {
-	clusterCreator := []reconciling.NamedClusterCreatorGetter{
-		gcpClusterCreator(gcp.Data),
-	}
+	cloudSpec := gcp.Data.Bootstrap.Spec.CloudSpec.GCP
+
+	clusterCreator := []reconciling.NamedClusterCreatorGetter{clusterCreator(gcp.Data)}
+	managedClusterCreator := []reconciling.NamedGCPManagedClusterCreatorGetter{gcpManagedClusterCreator(gcp.Data)}
+	managedControlPlaneCreator := []reconciling.NamedGCPManagedControlPlaneCreatorGetter{gcpManagedControlPlaneCreator(gcp.Data)}
+	machinePoolCreator := []reconciling.NamedMachinePoolCreatorGetter{gcpMachinePoolCreator(gcp.Data)}
+	managedMachinePoolCreator := []reconciling.NamedGCPManagedMachinePoolCreatorGetter{gcpManagedMachinePoolCreator(gcp.Data)}
 
 	if err := reconciling.ReconcileClusters(gcp.Data.Ctx, clusterCreator, gcp.Data.Namespace, gcp.Data.Client); err != nil {
 		return err
 	}
-	managecClusterCreator := []reconciling.NamedGCPManagedClusterCreatorGetter{
-		gcpManagedClusterCreator(gcp.Data),
-	}
-	if err := reconciling.ReconcileGCPManagedClusters(gcp.Data.Ctx, managecClusterCreator, gcp.Data.Namespace, gcp.Data.Client); err != nil {
+
+	if err := reconciling.ReconcileGCPManagedClusters(gcp.Data.Ctx, managedClusterCreator, gcp.Data.Namespace, gcp.Data.Client); err != nil {
 		return err
 	}
-	managecControlPlaneCreator := []reconciling.NamedGCPManagedControlPlaneCreatorGetter{
-		gcpManageControlPlaneCreator(gcp.Data),
-	}
-	if err := reconciling.ReconcileGCPManagedControlPlanes(gcp.Data.Ctx, managecControlPlaneCreator, gcp.Data.Namespace, gcp.Data.Client); err != nil {
+
+	if err := reconciling.ReconcileGCPManagedControlPlanes(gcp.Data.Ctx, managedControlPlaneCreator, gcp.Data.Namespace, gcp.Data.Client); err != nil {
 		return err
 	}
-	machinePoolCreator := []reconciling.NamedMachinePoolCreatorGetter{
-		gcpMachinePoolCreator(gcp.Data),
+
+	// Do not create any machine pools if GKE autopilot is enabled.
+	if cloudSpec.ControlPlane != nil && cloudSpec.ControlPlane.EnableAutopilot {
+		return nil
 	}
+
 	if err := reconciling.ReconcileMachinePools(gcp.Data.Ctx, machinePoolCreator, gcp.Data.Namespace, gcp.Data.Client); err != nil {
 		return err
 	}
-	managecMachinePoolCreator := []reconciling.NamedGCPManagedMachinePoolCreatorGetter{
-		gcpGCPManagedMachinePoolCreator(gcp.Data),
-	}
-	if err := reconciling.ReconcileGCPManagedMachinePools(gcp.Data.Ctx, managecMachinePoolCreator, gcp.Data.Namespace, gcp.Data.Client); err != nil {
+
+	if err := reconciling.ReconcileGCPManagedMachinePools(gcp.Data.Ctx, managedMachinePoolCreator, gcp.Data.Namespace, gcp.Data.Client); err != nil {
 		return err
 	}
 
@@ -188,25 +220,32 @@ func (gcp *GCPProvider) ReconcileCluster() error {
 }
 
 func GetGCPProvider(data *resources.TemplateData) (*GCPProvider, error) {
-	spec := data.Bootstrap.Spec.CloudSpec.GCP
+	ctx := context.Background()
+	cloudSpec := data.Bootstrap.Spec.CloudSpec.GCP
 
 	var secret corev1.Secret
-	if err := data.Client.Get(data.Ctx, ctrlruntimeclient.ObjectKey{Namespace: data.Namespace, Name: spec.CredentialsRef.Name}, &secret); err != nil {
+	if err := data.Client.Get(data.Ctx, ctrlruntimeclient.ObjectKey{Namespace: data.Namespace, Name: cloudSpec.CredentialsRef.Name}, &secret); err != nil {
 		return nil, err
 	}
 
-	credentials := strings.TrimSpace(string(secret.Data[spec.CredentialsRef.Key]))
+	credentials := strings.TrimSpace(string(secret.Data[cloudSpec.CredentialsRef.Key]))
+	gcpClient, err := cloudcontainer.NewClusterManagerClient(ctx, defaultClientOptions(credentials)...)
+	if err != nil {
+		return nil, fmt.Errorf("could not create gcp client: %s", err)
+	}
+
 	data.Log.Named("GCP provider").Info("Create GCP provider")
 	return &GCPProvider{
 		Data:           data,
 		Credentials:    credentials,
-		Region:         spec.ManagedCluster.Region,
-		version:        spec.Version,
-		fetchConfigUrl: spec.FetchConfigURL,
+		Region:         cloudSpec.Region,
+		version:        cloudSpec.Version,
+		fetchConfigUrl: cloudSpec.FetchConfigURL,
+		gcpClient:      gcpClient,
 	}, nil
 }
 
-func gcpClusterCreator(data *resources.TemplateData) reconciling.NamedClusterCreatorGetter {
+func clusterCreator(data *resources.TemplateData) reconciling.NamedClusterCreatorGetter {
 	return func() (string, reconciling.ClusterCreator) {
 		return data.Bootstrap.Spec.ClusterName, func(c *clusterapi.Cluster) (*clusterapi.Cluster, error) {
 			name := data.Bootstrap.Spec.ClusterName
@@ -246,26 +285,67 @@ func gcpClusterCreator(data *resources.TemplateData) reconciling.NamedClusterCre
 
 func gcpManagedClusterCreator(data *resources.TemplateData) reconciling.NamedGCPManagedClusterCreatorGetter {
 	return func() (string, reconciling.GCPManagedClusterCreator) {
-		return data.Bootstrap.Spec.ClusterName, func(c *gcpclusterapi.GCPManagedCluster) (*gcpclusterapi.GCPManagedCluster, error) {
+		return data.Bootstrap.Spec.ClusterName, func(c *expgcpclusterapi.GCPManagedCluster) (*expgcpclusterapi.GCPManagedCluster, error) {
+			subnets := make([]gcpclusterapi.SubnetSpec, 0)
+			for _, subnet := range data.Bootstrap.Spec.CloudSpec.GCP.Cluster.Network.Subnets {
+				subnets = append(subnets, gcpclusterapi.SubnetSpec{
+					Name:                subnet.Name,
+					CidrBlock:           subnet.CidrBlock,
+					SecondaryCidrBlocks: subnet.SecondaryCidrBlocks,
+					Region:              data.Bootstrap.Spec.CloudSpec.GCP.Region,
+				})
+			}
+
 			c.Name = data.Bootstrap.Spec.ClusterName
 			c.Namespace = data.Namespace
-			c.Spec = *data.Bootstrap.Spec.CloudSpec.GCP.ManagedCluster
+			c.Spec = expgcpclusterapi.GCPManagedClusterSpec{
+				Project: data.Bootstrap.Spec.CloudSpec.GCP.Project,
+				Region:  data.Bootstrap.Spec.CloudSpec.GCP.Region,
+				Network: v1beta1.NetworkSpec{
+					Name:                  data.Bootstrap.Spec.CloudSpec.GCP.Cluster.Network.Name,
+					AutoCreateSubnetworks: data.Bootstrap.Spec.CloudSpec.GCP.Cluster.Network.AutoCreateSubnetworks,
+					Subnets:               subnets,
+				},
+			}
 
 			return c, nil
 		}
 	}
 }
 
-func gcpManageControlPlaneCreator(data *resources.TemplateData) reconciling.NamedGCPManagedControlPlaneCreatorGetter {
+func gcpManagedControlPlaneCreator(data *resources.TemplateData) reconciling.NamedGCPManagedControlPlaneCreatorGetter {
 	return func() (string, reconciling.GCPManagedControlPlaneCreator) {
-		return fmt.Sprintf("%s-%s", data.Bootstrap.Spec.ClusterName, "control-plane"), func(c *gcpclusterapi.GCPManagedControlPlane) (*gcpclusterapi.GCPManagedControlPlane, error) {
+		return fmt.Sprintf("%s-%s", data.Bootstrap.Spec.ClusterName, "control-plane"), func(c *expgcpclusterapi.GCPManagedControlPlane) (*expgcpclusterapi.GCPManagedControlPlane, error) {
 			c.Name = fmt.Sprintf("%s-%s", data.Bootstrap.Spec.ClusterName, "control-plane")
 			c.Namespace = data.Namespace
-			c.Spec = *data.Bootstrap.Spec.CloudSpec.GCP.ControlPlane
-			c.Spec.ClusterName = data.Bootstrap.Spec.ClusterName
+			c.Spec = expgcpclusterapi.GCPManagedControlPlaneSpec{
+				ClusterName: data.Bootstrap.Spec.ClusterName,
+				Project:     data.Bootstrap.Spec.CloudSpec.GCP.Project,
+				Location:    data.Bootstrap.Spec.CloudSpec.GCP.Region,
+			}
 
 			if len(data.Bootstrap.Spec.KubernetesVersion) > 0 {
 				c.Spec.ControlPlaneVersion = resources.StrPtr(data.Bootstrap.Spec.KubernetesVersion)
+			}
+
+			if data.Bootstrap.Spec.CloudSpec.GCP.ControlPlane == nil {
+				return c, nil
+			}
+
+			c.Spec.EnableAutopilot = data.Bootstrap.Spec.CloudSpec.GCP.ControlPlane.EnableAutopilot
+			if data.Bootstrap.Spec.CloudSpec.GCP.ControlPlane.ReleaseChannel != nil {
+				var channel expgcpclusterapi.ReleaseChannel
+
+				switch *data.Bootstrap.Spec.CloudSpec.GCP.ControlPlane.ReleaseChannel {
+				case bv1alpha1.Rapid:
+					channel = expgcpclusterapi.Rapid
+				case bv1alpha1.Regular:
+					channel = expgcpclusterapi.Regular
+				case bv1alpha1.Stable:
+					channel = expgcpclusterapi.Stable
+				}
+
+				c.Spec.ReleaseChannel = &channel
 			}
 
 			return c, nil
@@ -301,15 +381,101 @@ func gcpMachinePoolCreator(data *resources.TemplateData) reconciling.NamedMachin
 	}
 }
 
-func gcpGCPManagedMachinePoolCreator(data *resources.TemplateData) reconciling.NamedGCPManagedMachinePoolCreatorGetter {
+func gcpManagedMachinePoolCreator(data *resources.TemplateData) reconciling.NamedGCPManagedMachinePoolCreatorGetter {
 	return func() (string, reconciling.GCPManagedMachinePoolCreator) {
-		return fmt.Sprintf("%s-%s", data.Bootstrap.Spec.ClusterName, "pool-0"), func(c *gcpclusterapi.GCPManagedMachinePool) (*gcpclusterapi.GCPManagedMachinePool, error) {
+		return fmt.Sprintf("%s-%s", data.Bootstrap.Spec.ClusterName, "pool-0"), func(c *expgcpclusterapi.GCPManagedMachinePool) (*expgcpclusterapi.GCPManagedMachinePool, error) {
 			c.Name = fmt.Sprintf("%s-%s", data.Bootstrap.Spec.ClusterName, "pool-0")
 			c.Namespace = data.Namespace
-			// TODO: Check spec
-			c.Spec = gcpclusterapi.GCPManagedMachinePoolSpec{}
+			c.Spec = expgcpclusterapi.GCPManagedMachinePoolSpec{}
+
+			if data.Bootstrap.Spec.CloudSpec.GCP.MachinePool.Scaling != nil {
+				c.Spec.Scaling = &expgcpclusterapi.NodePoolAutoScaling{
+					MinCount: data.Bootstrap.Spec.CloudSpec.GCP.MachinePool.Scaling.MinCount,
+					MaxCount: data.Bootstrap.Spec.CloudSpec.GCP.MachinePool.Scaling.MinCount,
+				}
+			}
 
 			return c, nil
 		}
+	}
+}
+
+func (gcp *GCPProvider) runClusterPreflightChecks() (*ctrl.Result, error) {
+	running, err := gcp.isClusterRunning()
+	if err != nil {
+		return nil, err
+	}
+
+	if !running {
+		gcp.Data.Log.Named("GCP provider").Info("Waiting for cluster to be in running state...")
+		return &ctrl.Result{RequeueAfter: 15 * time.Second}, nil
+	}
+
+	enabled, err := gcp.isWorkloadPoolEnabled()
+	if err != nil {
+		return nil, err
+	}
+
+	if !enabled {
+		gcp.Data.Log.Named("GCP provider").Info("Enabling default workload identity pool...")
+		return &ctrl.Result{RequeueAfter: 15 * time.Second}, gcp.enableDefaultWorkloadPool()
+	}
+
+	return nil, nil
+}
+
+func (gcp *GCPProvider) isClusterRunning() (bool, error) {
+	ctx := context.Background()
+	cluster, err := gcp.gcpClient.GetCluster(ctx, &container.GetClusterRequest{Name: gcp.clusterName()})
+	if err != nil {
+		return false, err
+	}
+
+	return cluster.Status == container.Cluster_RUNNING, nil
+}
+
+func (gcp *GCPProvider) isWorkloadPoolEnabled() (bool, error) {
+	ctx := context.Background()
+	cluster, err := gcp.gcpClient.GetCluster(ctx, &container.GetClusterRequest{Name: gcp.clusterName()})
+	if err != nil {
+		return false, err
+	}
+
+	return cluster.WorkloadIdentityConfig != nil && len(cluster.WorkloadIdentityConfig.WorkloadPool) > 0, nil
+}
+
+func (gcp *GCPProvider) enableDefaultWorkloadPool() error {
+	ctx := context.Background()
+	_, err := gcp.gcpClient.UpdateCluster(ctx, &container.UpdateClusterRequest{
+		Name: gcp.clusterName(),
+		Update: &container.ClusterUpdate{
+			DesiredWorkloadIdentityConfig: &container.WorkloadIdentityConfig{
+				WorkloadPool: gcp.defaultWorkloadPoolName(),
+			},
+		},
+	})
+
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+func (gcp *GCPProvider) clusterName() string {
+	return fmt.Sprintf("projects/%s/locations/%s/clusters/%s",
+		gcp.Data.Bootstrap.Spec.CloudSpec.GCP.Project,
+		gcp.Data.Bootstrap.Spec.CloudSpec.GCP.Region,
+		gcp.Data.Bootstrap.Spec.ClusterName,
+	)
+}
+
+func (gcp *GCPProvider) defaultWorkloadPoolName() string {
+	return fmt.Sprintf("%s.svc.id.goog", gcp.Data.Bootstrap.Spec.CloudSpec.GCP.Project)
+}
+
+func defaultClientOptions(credentials string) []option.ClientOption {
+	return []option.ClientOption{
+		option.WithUserAgent(fmt.Sprintf("gcp.cluster.x-k8s.io/%s", version.Get())),
+		option.WithCredentialsJSON([]byte(credentials)),
 	}
 }
