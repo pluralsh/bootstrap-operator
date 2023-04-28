@@ -6,12 +6,12 @@ import (
 	"strings"
 	"time"
 
-	"sigs.k8s.io/yaml"
-
 	"github.com/weaveworks/eksctl/pkg/actions/irsa"
 	api "github.com/weaveworks/eksctl/pkg/apis/eksctl.io/v1alpha5"
 	"github.com/weaveworks/eksctl/pkg/ctl/cmdutils"
 	"github.com/weaveworks/eksctl/pkg/ctl/cmdutils/filter"
+	infrav1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
+	"sigs.k8s.io/yaml"
 
 	awsv1 "github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
@@ -224,14 +224,17 @@ func (aws *AWSProvider) ReconcileCluster() error {
 	if err := reconciling.ReconcileAWSManagedControlPlanes(aws.Data.Ctx, managecControlPlaneCreator, aws.Data.Namespace, aws.Data.Client); err != nil {
 		return err
 	}
-	machinePoolCreator := []reconciling.NamedMachinePoolCreatorGetter{
-		awsMachinePoolCreator(aws.Data),
+
+	machinePoolCreator := []reconciling.NamedMachinePoolCreatorGetter{}
+	managecMachinePoolCreator := []reconciling.NamedAWSManagedMachinePoolCreatorGetter{}
+
+	for _, mp := range aws.Data.Bootstrap.Spec.CloudSpec.AWS.MachinePools {
+		machinePoolCreator = append(machinePoolCreator, awsMachinePoolCreator(mp, aws.Data.Namespace, aws.Data.Bootstrap.Spec.ClusterName))
+		managecMachinePoolCreator = append(managecMachinePoolCreator, awsAWSManagedMachinePoolCreator(mp, aws.Data.Namespace))
 	}
+
 	if err := reconciling.ReconcileMachinePools(aws.Data.Ctx, machinePoolCreator, aws.Data.Namespace, aws.Data.Client); err != nil {
 		return err
-	}
-	managecMachinePoolCreator := []reconciling.NamedAWSManagedMachinePoolCreatorGetter{
-		awsAWSManagedMachinePoolCreator(aws.Data),
 	}
 	if err := reconciling.ReconcileAWSManagedMachinePools(aws.Data.Ctx, managecMachinePoolCreator, aws.Data.Namespace, aws.Data.Client); err != nil {
 		return err
@@ -340,21 +343,21 @@ func awsManageControlPlaneCreator(data *resources.TemplateData) reconciling.Name
 	}
 }
 
-func awsMachinePoolCreator(data *resources.TemplateData) reconciling.NamedMachinePoolCreatorGetter {
+func awsMachinePoolCreator(mp bv1alpha1.AWSMachinePool, namespace, clusterName string) reconciling.NamedMachinePoolCreatorGetter {
 	return func() (string, reconciling.MachinePoolCreator) {
-		return fmt.Sprintf("%s-%s", data.Bootstrap.Spec.ClusterName, "pool-0"), func(c *clusterapiexp.MachinePool) (*clusterapiexp.MachinePool, error) {
-			name := fmt.Sprintf("%s-%s", data.Bootstrap.Spec.ClusterName, "pool-0")
+		return mp.Name, func(c *clusterapiexp.MachinePool) (*clusterapiexp.MachinePool, error) {
+			name := mp.Name
 			c.Name = name
-			c.Namespace = data.Namespace
+			c.Namespace = namespace
 			c.Spec = clusterapiexp.MachinePoolSpec{
-				ClusterName: data.Bootstrap.Spec.ClusterName,
-				Replicas:    resources.Int32(data.Bootstrap.Spec.CloudSpec.AWS.MachinePoolReplicas),
+				ClusterName: clusterName,
+				Replicas:    mp.Replicas,
 				Template: clusterapi.MachineTemplateSpec{
 					Spec: clusterapi.MachineSpec{
 						Bootstrap: clusterapi.Bootstrap{
 							DataSecretName: resources.StrPtr(""),
 						},
-						ClusterName: data.Bootstrap.Spec.ClusterName,
+						ClusterName: clusterName,
 						InfrastructureRef: corev1.ObjectReference{
 							Kind:       "AWSManagedMachinePool",
 							Name:       name,
@@ -368,14 +371,60 @@ func awsMachinePoolCreator(data *resources.TemplateData) reconciling.NamedMachin
 	}
 }
 
-func awsAWSManagedMachinePoolCreator(data *resources.TemplateData) reconciling.NamedAWSManagedMachinePoolCreatorGetter {
+func awsAWSManagedMachinePoolCreator(mp bv1alpha1.AWSMachinePool, namespace string) reconciling.NamedAWSManagedMachinePoolCreatorGetter {
 	return func() (string, reconciling.AWSManagedMachinePoolCreator) {
-		return fmt.Sprintf("%s-%s", data.Bootstrap.Spec.ClusterName, "pool-0"), func(c *awsmachinepool.AWSManagedMachinePool) (*awsmachinepool.AWSManagedMachinePool, error) {
-			c.Name = fmt.Sprintf("%s-%s", data.Bootstrap.Spec.ClusterName, "pool-0")
-			c.Namespace = data.Namespace
+		return mp.Name, func(c *awsmachinepool.AWSManagedMachinePool) (*awsmachinepool.AWSManagedMachinePool, error) {
+			c.Name = mp.Name
+			c.Namespace = namespace
 
 			c.Spec = awsmachinepool.AWSManagedMachinePoolSpec{
-				InstanceType: resources.StrPtr(data.Bootstrap.Spec.CloudSpec.AWS.InstanceType),
+				EKSNodegroupName:       mp.EKSNodegroupName,
+				AvailabilityZones:      mp.AvailabilityZones,
+				SubnetIDs:              mp.SubnetIDs,
+				AdditionalTags:         infrav1.Tags(mp.AdditionalTags),
+				RoleAdditionalPolicies: mp.RoleAdditionalPolicies,
+				RoleName:               mp.RoleName,
+				AMIVersion:             mp.AMIVersion,
+				Labels:                 mp.Labels,
+				DiskSize:               mp.DiskSize,
+				InstanceType:           mp.InstanceType,
+				ProviderIDList:         mp.ProviderIDList,
+			}
+			if mp.UpdateConfig != nil {
+				c.Spec.UpdateConfig = &awsmachinepool.UpdateConfig{
+					MaxUnavailable:           mp.UpdateConfig.MaxUnavailable,
+					MaxUnavailablePercentage: mp.UpdateConfig.MaxUnavailablePercentage,
+				}
+			}
+			if mp.CapacityType != nil {
+				capacityType := awsmachinepool.ManagedMachinePoolCapacityType(*mp.CapacityType)
+				c.Spec.CapacityType = &capacityType
+			}
+			if mp.RemoteAccess != nil {
+				c.Spec.RemoteAccess = &awsmachinepool.ManagedRemoteAccess{
+					SSHKeyName:           mp.RemoteAccess.SSHKeyName,
+					SourceSecurityGroups: mp.RemoteAccess.SourceSecurityGroups,
+					Public:               mp.RemoteAccess.Public,
+				}
+			}
+
+			if mp.AMIType != nil {
+				amiType := awsmachinepool.ManagedMachineAMIType(*mp.AMIType)
+				c.Spec.AMIType = &amiType
+			}
+			if mp.Scaling != nil {
+				c.Spec.Scaling = &awsmachinepool.ManagedMachinePoolScaling{
+					MinSize: mp.Scaling.MinSize,
+					MaxSize: mp.Scaling.MaxSize,
+				}
+			}
+
+			for _, taint := range mp.Taints {
+				c.Spec.Taints = append(c.Spec.Taints, awsmachinepool.Taint{
+					Effect: awsmachinepool.TaintEffect(taint.Effect),
+					Key:    taint.Key,
+					Value:  taint.Value,
+				})
 			}
 
 			return c, nil
