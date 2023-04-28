@@ -17,11 +17,12 @@ type BootstrapSpec struct {
 	KubernetesVersion string `json:"kubernetesVersion"`
 	// +kubebuilder:default:=false
 	// +optional
-	SkipClusterCreation bool                     `json:"skipClusterCreation"`
-	ClusterNetwork      ClusterNetwork           `json:"clusterNetwork"`
-	ClusterAPI          ClusterAPI               `json:"clusterAPI"`
-	CloudSpec           CloudSpec                `json:"cloudSpec"`
-	GitHubSecretRef     corev1.SecretKeySelector `json:"gitHubSecretRef"`
+	SkipClusterCreation bool           `json:"skipClusterCreation"`
+	ClusterNetwork      ClusterNetwork `json:"clusterNetwork"`
+	ClusterAPI          ClusterAPI     `json:"clusterAPI"`
+	CloudSpec           CloudSpec      `json:"cloudSpec"`
+	// +optional
+	GitHubSecretRef corev1.SecretKeySelector `json:"gitHubSecretRef,omitempty"`
 }
 
 // ClusterNetwork specifies the different networking

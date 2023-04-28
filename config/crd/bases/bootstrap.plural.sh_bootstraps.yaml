@@ -893,7 +893,6 @@ spec:
             - clusterAPI
             - clusterName
             - clusterNetwork
-            - gitHubSecretRef
             - kubernetesVersion
             type: object
           status:
