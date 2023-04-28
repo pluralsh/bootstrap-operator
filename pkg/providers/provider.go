@@ -22,6 +22,9 @@ func GetProvider(data *resources.TemplateData) (Provider, error) {
 	if data.Bootstrap.Spec.CloudSpec.AWS != nil {
 		return GetAWSProvider(data)
 	}
+	if data.Bootstrap.Spec.CloudSpec.Azure != nil {
+		return GetAzureProvider(data)
+	}
 	if data.Bootstrap.Spec.CloudSpec.GCP != nil {
 		return GetGCPProvider(data)
 	}

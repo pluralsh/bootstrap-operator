@@ -50,3 +50,10 @@ func Int64(v int64) *int64 {
 func StrPtr(s string) *string {
 	return &s
 }
+
+// Disabled return pointer to false value
+// for use in defaulters of *bool fields
+func Disabled() *bool {
+	v := false
+	return &v
+}

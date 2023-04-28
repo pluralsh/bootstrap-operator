@@ -18,10 +18,11 @@ type BootstrapSpec struct {
 	KubernetesVersion string `json:"kubernetesVersion"`
 	// +kubebuilder:default:=false
 	// +optional
-	SkipClusterCreation bool           `json:"skipClusterCreation"`
-	ClusterNetwork      ClusterNetwork `json:"clusterNetwork"`
-	ClusterAPI          ClusterAPI     `json:"clusterAPI"`
-	CloudSpec           CloudSpec      `json:"cloudSpec"`
+	SkipClusterCreation bool                     `json:"skipClusterCreation"`
+	ClusterNetwork      ClusterNetwork           `json:"clusterNetwork"`
+	ClusterAPI          ClusterAPI               `json:"clusterAPI"`
+	CloudSpec           CloudSpec                `json:"cloudSpec"`
+	GitHubSecretRef     corev1.SecretKeySelector `json:"gitHubSecretRef"`
 }
 
 // ClusterNetwork specifies the different networking
@@ -92,8 +93,9 @@ type ClusterAPIComponentSpec struct {
 }
 
 type CloudSpec struct {
-	AWS *AWSCloudSpec `json:"aws,omitempty"`
-	GCP *GCPCloudSpec `json:"gcp,omitempty"`
+	AWS   *AWSCloudSpec   `json:"aws,omitempty"`
+	Azure *AzureCloudSpec `json:"azure,omitempty"`
+	GCP   *GCPCloudSpec   `json:"gcp,omitempty"`
 }
 
 type AWSCloudSpec struct {
@@ -269,4 +271,12 @@ type BootstrapList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []Bootstrap `json:"items"`
+}
+
+type APIEndpoint struct {
+	// The hostname on which the API server is serving.
+	Host string `json:"host"`
+
+	// The port on which the API server is serving.
+	Port int32 `json:"port"`
 }

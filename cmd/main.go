@@ -5,6 +5,7 @@ import (
 	"os"
 
 	certv1 "github.com/cert-manager/cert-manager/pkg/apis/certmanager/v1"
+	cmapi "github.com/cert-manager/cert-manager/pkg/apis/certmanager/v1"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -16,6 +17,7 @@ import (
 	awsinfrastructure "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 	awscontrolplane "sigs.k8s.io/cluster-api-provider-aws/v2/controlplane/eks/api/v1beta2"
 	awsmachinepool "sigs.k8s.io/cluster-api-provider-aws/v2/exp/api/v1beta2"
+	azurecontroleplane "sigs.k8s.io/cluster-api-provider-azure/api/v1beta1"
 	gcpclusterapi "sigs.k8s.io/cluster-api-provider-gcp/exp/api/v1beta1"
 	clusterapi "sigs.k8s.io/cluster-api/api/v1beta1"
 	clusterapiexp "sigs.k8s.io/cluster-api/exp/api/v1beta1"
@@ -38,6 +40,7 @@ func init() {
 	utilruntime.Must(awsmachinepool.AddToScheme(scheme))
 	utilruntime.Must(awsinfrastructure.AddToScheme(scheme))
 	utilruntime.Must(awscontrolplane.AddToScheme(scheme))
+	utilruntime.Must(azurecontroleplane.AddToScheme(scheme))
 	utilruntime.Must(clusterapi.AddToScheme(scheme))
 	utilruntime.Must(clusterapioperator.AddToScheme(scheme))
 	utilruntime.Must(admissionregistrationv1.AddToScheme(scheme))
@@ -47,6 +50,8 @@ func init() {
 	utilruntime.Must(appsv1.AddToScheme(scheme))
 	utilruntime.Must(corev1.AddToScheme(scheme))
 	utilruntime.Must(gcpclusterapi.AddToScheme(scheme))
+	utilruntime.Must(cmapi.AddToScheme(scheme))
+
 }
 
 func main() {

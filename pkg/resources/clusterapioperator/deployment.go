@@ -92,6 +92,10 @@ func DeploymentCreator(data *resources.TemplateData) reconciling.NamedDeployment
 									ContainerPort: 8443,
 								},
 							},
+							SecurityContext: &corev1.SecurityContext{
+								AllowPrivilegeEscalation: resources.Disabled(),
+								RunAsUser:                resources.Int64(65532),
+							},
 						},
 					},
 				},
