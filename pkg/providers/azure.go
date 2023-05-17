@@ -35,7 +35,7 @@ func GetAzureProvider(data *resources.TemplateData) (*AzureProvider, error) {
 	azureSpec := spec.CloudSpec.Azure
 
 	var gitHubToken string
-	if spec.GitHubSecretRef != nil {
+	if spec.GitHubSecretRef != nil && spec.GitHubSecretRef.Name != "" && spec.GitHubSecretRef.Key != "" {
 		var secret corev1.Secret
 		if err := data.Client.Get(data.Ctx, ctrlruntimeclient.ObjectKey{
 			Namespace: data.Bootstrap.Namespace, Name: spec.GitHubSecretRef.Name}, &secret); err != nil {
