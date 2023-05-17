@@ -25,7 +25,7 @@ type BootstrapSpec struct {
 	ClusterAPI     ClusterAPI     `json:"clusterAPI"`
 	CloudSpec      CloudSpec      `json:"cloudSpec"`
 	// +optional
-	GitHubSecretRef corev1.SecretKeySelector `json:"gitHubSecretRef,omitempty"`
+	GitHubSecretRef *corev1.SecretKeySelector `json:"gitHubSecretRef,omitempty"`
 }
 
 // ClusterNetwork specifies the different networking

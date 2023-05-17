@@ -34,12 +34,15 @@ func GetAzureProvider(data *resources.TemplateData) (*AzureProvider, error) {
 	spec := data.Bootstrap.Spec
 	azureSpec := spec.CloudSpec.Azure
 
-	var secret corev1.Secret
-	if err := data.Client.Get(data.Ctx, ctrlruntimeclient.ObjectKey{
-		Namespace: data.Bootstrap.Namespace, Name: spec.GitHubSecretRef.Name}, &secret); err != nil {
-		return nil, err
+	var gitHubToken string
+	if spec.GitHubSecretRef != nil {
+		var secret corev1.Secret
+		if err := data.Client.Get(data.Ctx, ctrlruntimeclient.ObjectKey{
+			Namespace: data.Bootstrap.Namespace, Name: spec.GitHubSecretRef.Name}, &secret); err != nil {
+			return nil, err
+		}
+		gitHubToken = strings.TrimSpace(string(secret.Data[spec.GitHubSecretRef.Key]))
 	}
-	gitHubToken := strings.TrimSpace(string(secret.Data[spec.GitHubSecretRef.Key]))
 
 	data.Log.Named("Azure provider").Info("Create Azure provider")
 	return &AzureProvider{
