@@ -28,6 +28,20 @@ func (r *Reconciler) reconcileCluster(ctx context.Context, bootstrap *bv1alpha1.
 	return provider.CheckCluster()
 }
 
+func (r *Reconciler) checkCluster(ctx context.Context, bootstrap *bv1alpha1.Bootstrap) (*ctrl.Result, error) {
+	provider, err := providers.GetProvider(&resources.TemplateData{
+		Ctx:       ctx,
+		Client:    r.Client,
+		Bootstrap: bootstrap,
+		Namespace: r.Namespace,
+		Log:       r.Log,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return provider.CheckCluster()
+}
+
 func (r *Reconciler) updateClusterStatus(ctx context.Context, bootstrap *bv1alpha1.Bootstrap, phase bv1alpha1.ComponentPhase, message string, ready bool) error {
 	err := helper.UpdateBootstrapStatus(ctx, r.Client, bootstrap, func(c *bv1alpha1.Bootstrap) {
 		if c.Status.CapiClusterStatus == nil {
