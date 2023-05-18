@@ -74,6 +74,7 @@ func (r *Reconciler) move(ctx context.Context, bootstrap *bv1alpha1.Bootstrap) e
 		awscontrolplane.GroupVersion.Group,
 		awsmachinepool.GroupVersion.Group,
 		azurecontroleplane.GroupVersion.Group,
+		"aadpodidentity.k8s.io", // TODO: Remove it once CAPI will be the default.
 		clusterapiexp.GroupVersion.Group,
 		gcpclusterapi.GroupVersion.Group)
 	var crdCreatorGetter []reconciling.NamedCustomResourceDefinitionCreatorGetter
