@@ -412,16 +412,6 @@ func (gcp *GCPProvider) runClusterPreflightChecks() (*ctrl.Result, error) {
 		return &ctrl.Result{RequeueAfter: 15 * time.Second}, nil
 	}
 
-	enabled, err := gcp.isWorkloadPoolEnabled()
-	if err != nil {
-		return nil, err
-	}
-
-	if !enabled {
-		gcp.Data.Log.Named("GCP provider").Info("Enabling default workload identity pool...")
-		return &ctrl.Result{RequeueAfter: 15 * time.Second}, gcp.enableDefaultWorkloadPool()
-	}
-
 	return nil, nil
 }
 
@@ -435,43 +425,12 @@ func (gcp *GCPProvider) isClusterRunning() (bool, error) {
 	return cluster.Status == container.Cluster_RUNNING, nil
 }
 
-func (gcp *GCPProvider) isWorkloadPoolEnabled() (bool, error) {
-	ctx := context.Background()
-	cluster, err := gcp.gcpClient.GetCluster(ctx, &container.GetClusterRequest{Name: gcp.clusterName()})
-	if err != nil {
-		return false, err
-	}
-
-	return cluster.WorkloadIdentityConfig != nil && len(cluster.WorkloadIdentityConfig.WorkloadPool) > 0, nil
-}
-
-func (gcp *GCPProvider) enableDefaultWorkloadPool() error {
-	ctx := context.Background()
-	_, err := gcp.gcpClient.UpdateCluster(ctx, &container.UpdateClusterRequest{
-		Name: gcp.clusterName(),
-		Update: &container.ClusterUpdate{
-			DesiredWorkloadIdentityConfig: &container.WorkloadIdentityConfig{
-				WorkloadPool: gcp.defaultWorkloadPoolName(),
-			},
-		},
-	})
-
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
 func (gcp *GCPProvider) clusterName() string {
 	return fmt.Sprintf("projects/%s/locations/%s/clusters/%s",
 		gcp.Data.Bootstrap.Spec.CloudSpec.GCP.Project,
 		gcp.Data.Bootstrap.Spec.CloudSpec.GCP.Region,
 		gcp.Data.Bootstrap.Spec.ClusterName,
 	)
-}
-
-func (gcp *GCPProvider) defaultWorkloadPoolName() string {
-	return fmt.Sprintf("%s.svc.id.goog", gcp.Data.Bootstrap.Spec.CloudSpec.GCP.Project)
 }
 
 func defaultClientOptions(credentials string) []option.ClientOption {
