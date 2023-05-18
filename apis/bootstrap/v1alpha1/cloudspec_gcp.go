@@ -90,13 +90,16 @@ type GCPManagedControlPlaneSpec struct {
 	// EnableAutopilot indicates whether to enable autopilot for this GKE cluster.
 	// +optional
 	EnableAutopilot bool `json:"enableAutopilot"`
-
+	// EnableWorkloadIdentity allows enabling workload identity during cluster creation when
+	// EnableAutopilot is disabled.
+	EnableWorkloadIdentity bool `json:"enableWorkloadIdentity"`
 	// ReleaseChannel represents the release channel of the GKE cluster.
+	// "No channel" is used if ReleaseChannel is not set.
 	// +optional
 	ReleaseChannel *GCPReleaseChannel `json:"releaseChannel,omitempty"`
 }
 
-// GCPReleaseChannel is the release channel of the GKE cluster
+// GCPReleaseChannel is the release channel of the GKE cluster.
 // +kubebuilder:validation:Enum=rapid;regular;stable
 type GCPReleaseChannel string
 

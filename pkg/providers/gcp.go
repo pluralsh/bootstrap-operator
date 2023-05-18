@@ -333,6 +333,7 @@ func gcpManagedControlPlaneCreator(data *resources.TemplateData) reconciling.Nam
 			}
 
 			c.Spec.EnableAutopilot = data.Bootstrap.Spec.CloudSpec.GCP.ControlPlane.EnableAutopilot
+			c.Spec.EnableWorkloadIdentity = data.Bootstrap.Spec.CloudSpec.GCP.ControlPlane.EnableWorkloadIdentity
 			if data.Bootstrap.Spec.CloudSpec.GCP.ControlPlane.ReleaseChannel != nil {
 				var channel expgcpclusterapi.ReleaseChannel
 
