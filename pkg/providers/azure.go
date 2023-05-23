@@ -350,15 +350,37 @@ func azureMachinePoolCreator(machinePool *bv1alpha1.AzureMachinePool, data *reso
 	}
 }
 
-func azureManagedMachinePoolCreator(machinePool *bv1alpha1.AzureMachinePool, data *resources.TemplateData) r.NamedAzureManagedMachinePoolCreatorGetter {
+func azureManagedMachinePoolCreator(mp *bv1alpha1.AzureMachinePool, data *resources.TemplateData) r.NamedAzureManagedMachinePoolCreatorGetter {
 	return func() (string, r.AzureManagedMachinePoolCreator) {
-		return machinePool.Name, func(c *azure.AzureManagedMachinePool) (*azure.AzureManagedMachinePool, error) {
-			c.Name = machinePool.Name
+		return mp.Name, func(c *azure.AzureManagedMachinePool) (*azure.AzureManagedMachinePool, error) {
+			c.Name = mp.Name
 			c.Namespace = data.Bootstrap.Namespace
 			c.Spec = azure.AzureManagedMachinePoolSpec{
-				Name: &machinePool.Name,
-				Mode: machinePool.Mode,
-				SKU:  machinePool.SKU,
+				Name: &mp.Name,
+				Mode: mp.Mode,
+				SKU:  mp.SKU,
+				ScaleSetPriority: mp.ScaleSetPriority,
+				AvailabilityZones: mp.AvailabilityZones,
+				OsDiskType: mp.OsDiskType,
+				OSDiskSizeGB: mp.OSDiskSizeGB,
+				MaxPods: mp.MaxPods,
+				NodeLabels: mp.NodeLabels,
+				AdditionalTags: azure.Tags(mp.AdditionalTags),
+			}
+
+			if mp.Scaling != nil {
+				c.Spec.Scaling = &azure.ManagedMachinePoolScaling{
+					MinSize: mp.Scaling.MinSize,
+					MaxSize: mp.Scaling.MaxSize,
+				}
+			}
+
+			for _, taint := range mp.Taints {
+				c.Spec.Taints = append(c.Spec.Taints, azure.Taint{
+					Effect: azure.TaintEffect(taint.Effect),
+					Key:    taint.Key,
+					Value:  taint.Value,
+				})
 			}
 
 			return c, nil

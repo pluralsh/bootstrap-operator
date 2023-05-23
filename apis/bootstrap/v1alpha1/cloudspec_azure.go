@@ -108,10 +108,55 @@ type AzureMachinePool struct {
 	// Name of the agent pool.
 	Name string `json:"name,omitempty"`
 
-	// Mode represents mode of an agent pool. Possible values include: System, User.
+	// ScaleSetPriority specifies the ScaleSetPriority value.
+	// Default to Regular. Possible values include: 'Regular', 'Spot'
+	// +kubebuilder:validation:Enum=Regular;Spot
+	// +optional
+	ScaleSetPriority *string `json:"scaleSetPriority,omitempty"`
+
+	// Scaling specifies the autoscaling parameters for the node pool.
+	// +optional
+	Scaling *ManagedMachinePoolScaling `json:"scaling,omitempty"`
+
+	// AvailabilityZones - Availability zones for nodes.
+	// Must use VirtualMachineScaleSets AgentPoolType.
+	// +optional
+	AvailabilityZones []string `json:"availabilityZones,omitempty"`
+
+	// Mode represents mode of an agent pool.
+	// Possible values include: System, User.
 	// +kubebuilder:validation:Enum=System;User
 	Mode string `json:"mode"`
 
 	// SKU is the size of the VMs in the node pool.
 	SKU string `json:"sku"`
+
+	// OsDiskType specifies the OS disk type for each node in the pool.
+	// Allowed values are 'Ephemeral' and 'Managed'.
+	// +kubebuilder:validation:Enum=Ephemeral;Managed
+	// +kubebuilder:default=Managed
+	// +optional
+	OsDiskType *string `json:"osDiskType,omitempty"`
+
+	// OSDiskSizeGB is the disk size for every machine in this agent pool.
+	// If you specify 0, it will apply the default osDisk size according to the vmSize specified.
+	// +optional
+	OSDiskSizeGB *int32 `json:"osDiskSizeGB,omitempty"`
+
+	// MaxPods specifies the kubelet --max-pods configuration for the node pool.
+	// +optional
+	MaxPods *int32 `json:"maxPods,omitempty"`
+
+	// Node labels - labels for all of the nodes present in node pool
+	// +optional
+	NodeLabels map[string]string `json:"nodeLabels,omitempty"`
+
+	// Taints specifies the taints for nodes present in this agent pool.
+	// +optional
+	Taints Taints `json:"taints,omitempty"`
+
+	// AdditionalTags is an optional set of tags to add to Azure resources managed by the
+	// Azure provider, in addition to the ones added by default.
+	// +optional
+	AdditionalTags Tags `json:"additionalTags,omitempty"`
 }
