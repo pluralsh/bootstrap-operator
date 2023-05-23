@@ -199,3 +199,48 @@ type APIEndpoint struct {
 	// The port on which the API server is serving.
 	Port int32 `json:"port"`
 }
+
+// ManagedMachinePoolScaling specifies scaling options.
+type ManagedMachinePoolScaling struct {
+	MinSize *int32 `json:"minSize,omitempty"`
+	MaxSize *int32 `json:"maxSize,omitempty"`
+}
+
+// Taint defines the specs for a Kubernetes taint.
+type Taint struct {
+	// Effect specifies the effect for the taint
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:Enum=no-schedule;no-execute;prefer-no-schedule
+	Effect TaintEffect `json:"effect"`
+	// Key is the key of the taint
+	// +kubebuilder:validation:Required
+	Key string `json:"key"`
+	// Value is the value of the taint
+	// +kubebuilder:validation:Required
+	Value string `json:"value"`
+}
+
+// Equals is used to test if 2 taints are equal.
+func (t *Taint) Equals(other *Taint) bool {
+	if t == nil || other == nil {
+		return t == other
+	}
+
+	return t.Effect == other.Effect &&
+		t.Key == other.Key &&
+		t.Value == other.Value
+}
+
+// Taints is an array of Taints.
+type Taints []Taint
+
+// Contains checks for existence of a matching taint.
+func (t *Taints) Contains(taint *Taint) bool {
+	for _, t := range *t {
+		if t.Equals(taint) {
+			return true
+		}
+	}
+
+	return false
+}
