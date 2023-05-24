@@ -61,6 +61,25 @@ spec:
                         - key
                         type: object
                         x-kubernetes-map-type: atomic
+                      accountIDRef:
+                        description: SecretKeySelector selects a key of a Secret.
+                        properties:
+                          key:
+                            description: The key of the secret to select from.  Must
+                              be a valid secret key.
+                            type: string
+                          name:
+                            description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                              TODO: Add other useful fields. apiVersion, kind, uid?'
+                            type: string
+                          optional:
+                            description: Specify whether the Secret or its key must
+                              be defined
+                            type: boolean
+                        required:
+                        - key
+                        type: object
+                        x-kubernetes-map-type: atomic
                       addons:
                         items:
                           description: Addon represents a EKS addon.
@@ -394,10 +413,14 @@ spec:
                         - key
                         type: object
                         x-kubernetes-map-type: atomic
+                      useIAMRole:
+                        default: false
+                        type: boolean
                       version:
                         type: string
                     required:
                     - accessKeyIdRef
+                    - accountIDRef
                     - machinePools
                     - region
                     - secretAccessKeyRef
@@ -807,14 +830,22 @@ spec:
                             description: EnableAutopilot indicates whether to enable
                               autopilot for this GKE cluster.
                             type: boolean
+                          enableWorkloadIdentity:
+                            description: EnableWorkloadIdentity allows enabling workload
+                              identity during cluster creation when EnableAutopilot
+                              is disabled.
+                            type: boolean
                           releaseChannel:
                             description: ReleaseChannel represents the release channel
-                              of the GKE cluster.
+                              of the GKE cluster. "No channel" is used if ReleaseChannel
+                              is not set.
                             enum:
                             - rapid
                             - regular
                             - stable
                             type: string
+                        required:
+                        - enableWorkloadIdentity
                         type: object
                       credentialsRef:
                         description: SecretKeySelector selects a key of a Secret.

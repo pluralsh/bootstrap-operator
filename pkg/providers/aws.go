@@ -39,6 +39,7 @@ import (
 
 type AWSProvider struct {
 	Data            *resources.TemplateData
+	AccountID       string
 	AccessKeyID     string
 	SecretAccessKey string
 	SessionToken    string
@@ -100,13 +101,20 @@ func (aws *AWSProvider) createCredentialSecret() error {
 			Name:      awsSecretName,
 		},
 		Data: map[string][]byte{
-			"CAPA_EKS_ADD_ROLES":         []byte("true"),
-			"CAPA_EKS_IAM":               []byte("true"),
-			"AWS_REGION":                 []byte(aws.Region),
-			"EXP_MACHINE_POOL":           []byte("true"),
-			"AWS_B64ENCODED_CREDENTIALS": []byte(credentials),
+			"CAPA_EKS_ADD_ROLES":       []byte("true"),
+			"CAPA_EKS_IAM":             []byte("true"),
+			"AWS_REGION":               []byte(aws.Region),
+			"EXP_MACHINE_POOL":         []byte("true"),
+			"EXP_EXTERNAL_RESOURCE_GC": []byte("true"),
 		},
 	}
+
+	if aws.Data.Bootstrap.Spec.CloudSpec.AWS.UseIAMRole {
+		secret.Data["AWS_CONTROLLER_IAM_ROLE"] = []byte(fmt.Sprintf("arn:aws:iam::%s:role/controllers.cluster-api-provider-aws.sigs.k8s.io", aws.AccountID))
+	} else {
+		secret.Data["AWS_B64ENCODED_CREDENTIALS"] = []byte(credentials)
+	}
+
 	if err := aws.Data.Client.Create(aws.Data.Ctx, &secret); err != nil {
 		return err
 	}
@@ -253,9 +261,11 @@ func GetAWSProvider(data *resources.TemplateData) (*AWSProvider, error) {
 	accessKeyID := strings.TrimSpace(string(secret.Data[spec.AccessKeyIDRef.Key]))
 	secretAccessKey := strings.TrimSpace(string(secret.Data[spec.SecretAccessKeyRef.Key]))
 	sessionToken := strings.TrimSpace(string(secret.Data[spec.SessionTokenRef.Key]))
+	accountID := strings.TrimSpace(string(secret.Data[spec.AWSAccountIDRef.Key]))
 	data.Log.Named("AWS provider").Info("Create AWS provider")
 	return &AWSProvider{
 		Data:            data,
+		AccountID:       accountID,
 		AccessKeyID:     accessKeyID,
 		SecretAccessKey: secretAccessKey,
 		SessionToken:    sessionToken,
