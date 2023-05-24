@@ -58,9 +58,6 @@ type AWSCloudSpec struct {
 	SecretAccessKeyRef corev1.SecretKeySelector `json:"secretAccessKeyRef"`
 	SessionTokenRef    corev1.SecretKeySelector `json:"sessionTokenRef"`
 	AWSAccountIDRef    corev1.SecretKeySelector `json:"accountIDRef"`
-	// +kubebuilder:default:=false
-	// +optional
-	UseIAMRole bool `json:"useIAMRole,omitempty"`
 }
 
 type AWSMachinePool struct {

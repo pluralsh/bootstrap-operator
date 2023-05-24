@@ -109,10 +109,10 @@ func (aws *AWSProvider) createCredentialSecret() error {
 		},
 	}
 
-	if aws.Data.Bootstrap.Spec.CloudSpec.AWS.UseIAMRole {
-		secret.Data["AWS_CONTROLLER_IAM_ROLE"] = []byte(fmt.Sprintf("arn:aws:iam::%s:role/controllers.cluster-api-provider-aws.sigs.k8s.io", aws.AccountID))
-	} else {
+	if aws.Data.Bootstrap.Spec.BootstrapMode {
 		secret.Data["AWS_B64ENCODED_CREDENTIALS"] = []byte(credentials)
+	} else {
+		secret.Data["AWS_CONTROLLER_IAM_ROLE"] = []byte(fmt.Sprintf("arn:aws:iam::%s:role/controllers.cluster-api-provider-aws.sigs.k8s.io", aws.AccountID))
 	}
 
 	if err := aws.Data.Client.Create(aws.Data.Ctx, &secret); err != nil {

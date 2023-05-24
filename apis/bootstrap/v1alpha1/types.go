@@ -20,7 +20,10 @@ type BootstrapSpec struct {
 	SkipClusterCreation bool `json:"skipClusterCreation"`
 	// +kubebuilder:default:=false
 	// +optional
-	MoveCluster    bool           `json:"moveCluster"`
+	MoveCluster bool `json:"moveCluster"`
+	// +kubebuilder:default:=false
+	// +optional
+	BootstrapMode  bool           `json:"bootstrapMode,omitempty"`
 	ClusterNetwork ClusterNetwork `json:"clusterNetwork"`
 	ClusterAPI     ClusterAPI     `json:"clusterAPI"`
 	CloudSpec      CloudSpec      `json:"cloudSpec"`
