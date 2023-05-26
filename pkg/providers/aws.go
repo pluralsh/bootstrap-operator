@@ -113,7 +113,7 @@ func (aws *AWSProvider) createCredentialSecret() error {
 		secret.Data["AWS_B64ENCODED_CREDENTIALS"] = []byte(credentials)
 	} else {
 		secret.Data["AWS_B64ENCODED_CREDENTIALS"] = []byte("")
-		secret.Data["AWS_CONTROLLER_IAM_ROLE"] = []byte(fmt.Sprintf("arn:aws:iam::%s:role/controllers.cluster-api-provider-aws.sigs.k8s.io", aws.AccountID))
+		secret.Data["AWS_CONTROLLER_IAM_ROLE"] = []byte(fmt.Sprintf("arn:aws:iam::%s:role/capa-controller-manager", aws.AccountID))
 	}
 
 	if err := aws.Data.Client.Create(aws.Data.Ctx, &secret); err != nil {
@@ -541,7 +541,7 @@ func (aws *AWSProvider) postInstall() error {
 	filteredServiceAccounts := saFilter.FilterMatching(cfg.IAM.ServiceAccounts)
 	saFilter.LogInfo(cfg.IAM.ServiceAccounts)
 	if filteredServiceAccounts == nil {
-		existingIAMStacks, err := stackManager.ListStacksMatching(ctx, "eksctl-.*-addon-iamserviceaccount")
+		existingIAMStacks, err := stackManager.ListStacksMatching(ctx, "eksctl-.*-iamserviceaccount")
 		if err != nil {
 			return err
 		}
