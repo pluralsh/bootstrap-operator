@@ -15,6 +15,7 @@ type Provider interface {
 	FetchConfigURL() string
 	ReconcileCluster() error
 	CheckCluster() (*ctrl.Result, error)
+	MigrateCluster() (*ctrl.Result, error)
 	Init() (*ctrl.Result, error)
 }
 

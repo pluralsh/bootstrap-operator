@@ -123,6 +123,10 @@ func (azure *AzureProvider) Secret() string {
 	return azureSecretName
 }
 
+func (azure *AzureProvider) MigrateCluster() (*ctrl.Result, error) {
+	return nil, nil
+}
+
 func (azure *AzureProvider) CheckCluster() (*ctrl.Result, error) {
 	var cluster clusterv1.Cluster
 	if err := azure.Data.Client.Get(azure.Data.Ctx, ctrlruntimeclient.ObjectKey{
@@ -356,16 +360,16 @@ func azureManagedMachinePoolCreator(mp *bv1alpha1.AzureMachinePool, data *resour
 			c.Name = mp.Name
 			c.Namespace = data.Bootstrap.Namespace
 			c.Spec = azure.AzureManagedMachinePoolSpec{
-				Name: &mp.Name,
-				Mode: mp.Mode,
-				SKU:  mp.SKU,
-				ScaleSetPriority: mp.ScaleSetPriority,
+				Name:              &mp.Name,
+				Mode:              mp.Mode,
+				SKU:               mp.SKU,
+				ScaleSetPriority:  mp.ScaleSetPriority,
 				AvailabilityZones: mp.AvailabilityZones,
-				OsDiskType: mp.OsDiskType,
-				OSDiskSizeGB: mp.OSDiskSizeGB,
-				MaxPods: mp.MaxPods,
-				NodeLabels: mp.NodeLabels,
-				AdditionalTags: azure.Tags(mp.AdditionalTags),
+				OsDiskType:        mp.OsDiskType,
+				OSDiskSizeGB:      mp.OSDiskSizeGB,
+				MaxPods:           mp.MaxPods,
+				NodeLabels:        mp.NodeLabels,
+				AdditionalTags:    azure.Tags(mp.AdditionalTags),
 			}
 
 			if mp.Scaling != nil {

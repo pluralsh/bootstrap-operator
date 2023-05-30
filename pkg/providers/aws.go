@@ -443,15 +443,11 @@ func awsAWSManagedMachinePoolCreator(mp bv1alpha1.AWSMachinePool, namespace stri
 	}
 }
 
-func (aws *AWSProvider) postInstall() error {
+func (aws *AWSProvider) installSA(serviceAccounts []bv1alpha1.ClusterIAMServiceAccount) error {
 	os.Setenv("AWS_ACCESS_KEY_ID", aws.AccessKeyID)
 	os.Setenv("AWS_SECRET_ACCESS_KEY", aws.SecretAccessKey)
 	os.Setenv("AWS_SESSION_TOKEN", aws.SessionToken)
 	os.Setenv("AWS_REGION", aws.Region)
-
-	if len(aws.Data.Bootstrap.Spec.CloudSpec.AWS.ServiceAccounts) == 0 {
-		return nil
-	}
 
 	aws.Data.Log.Info("Installing SA ...")
 	cmd := &cmdutils.Cmd{}
@@ -463,7 +459,7 @@ func (aws *AWSProvider) postInstall() error {
 
 	cfg.IAM.WithOIDC = api.Enabled()
 
-	for _, sa := range aws.Data.Bootstrap.Spec.CloudSpec.AWS.ServiceAccounts {
+	for _, sa := range serviceAccounts {
 		serviceAccount := &api.ClusterIAMServiceAccount{
 			ClusterIAMMeta: api.ClusterIAMMeta{
 				Name:        sa.Name,
@@ -552,4 +548,34 @@ func (aws *AWSProvider) postInstall() error {
 	}
 
 	return nil
+
+}
+
+func (aws *AWSProvider) postInstall() error {
+	if len(aws.Data.Bootstrap.Spec.CloudSpec.AWS.ServiceAccounts) == 0 {
+		return nil
+	}
+	return aws.installSA(aws.Data.Bootstrap.Spec.CloudSpec.AWS.ServiceAccounts)
+}
+
+func (aws *AWSProvider) MigrateCluster() (*ctrl.Result, error) {
+	serviceAccounts := []bv1alpha1.ClusterIAMServiceAccount{
+		{
+			ClusterIAMMeta: bv1alpha1.ClusterIAMMeta{
+				Name:      "capa-controller-manager",
+				Namespace: aws.Data.Namespace,
+			},
+			AttachPolicyARNs:  []string{"arn:aws:iam::aws:policy/AdministratorAccess"},
+			WellKnownPolicies: bv1alpha1.WellKnownPolicies{},
+			RoleName:          "capa-controller-manager",
+			RoleOnly:          true,
+		},
+	}
+
+	if err := aws.installSA(serviceAccounts); err != nil {
+		return &ctrl.Result{
+			RequeueAfter: 5 * time.Second,
+		}, nil
+	}
+	return nil, nil
 }

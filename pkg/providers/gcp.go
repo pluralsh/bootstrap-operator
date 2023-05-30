@@ -114,6 +114,10 @@ func (gcp *GCPProvider) Secret() string {
 	return gcpSecretName
 }
 
+func (gcp *GCPProvider) MigrateCluster() (*ctrl.Result, error) {
+	return nil, nil
+}
+
 func (gcp *GCPProvider) CheckCluster() (*ctrl.Result, error) {
 	cluster := new(clusterapi.Cluster)
 	if err := gcp.Data.Client.Get(gcp.Data.Ctx, ctrlruntimeclient.ObjectKey{Namespace: gcp.Data.Namespace, Name: gcp.Data.Bootstrap.Spec.ClusterName}, cluster); err != nil {

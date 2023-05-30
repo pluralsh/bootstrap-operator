@@ -120,7 +120,33 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 			return *res, nil
 		}
 	}
-
+	if bootstrap.Spec.MigrateCluster {
+		if !bootstrap.Status.Ready {
+			res, err := r.migration(ctx, bootstrap)
+			if err != nil {
+				updateErr := r.updateStatus(ctx, bootstrap, bv1alpha1.Error, err.Error(), false)
+				if updateErr != nil {
+					return ctrl.Result{}, fmt.Errorf("failed to set the bootstrap error: %w", updateErr)
+				}
+				return ctrl.Result{}, fmt.Errorf("failed to migrate cluster: %w", err)
+			}
+			res, err = r.checkCluster(ctx, bootstrap)
+			if err != nil {
+				updateErr := r.updateStatus(ctx, bootstrap, bv1alpha1.Error, err.Error(), false)
+				if updateErr != nil {
+					return ctrl.Result{}, fmt.Errorf("failed to set the bootstrap error: %w", updateErr)
+				}
+				return ctrl.Result{}, fmt.Errorf("failed to check cluster: %w", err)
+			}
+			updateErr := r.updateStatus(ctx, bootstrap, bv1alpha1.Running, "Cluster created successfully", true)
+			if updateErr != nil {
+				return ctrl.Result{}, fmt.Errorf("failed to set the bootstrap error: %w", updateErr)
+			}
+			if res != nil {
+				return *res, nil
+			}
+		}
+	}
 	if bootstrap.Spec.SkipClusterCreation && bootstrap.Spec.MoveCluster {
 		if !bootstrap.Status.CapiClusterStatus.Ready {
 			res, err := r.checkCluster(ctx, bootstrap)
@@ -129,7 +155,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 				if updateErr != nil {
 					return ctrl.Result{}, fmt.Errorf("failed to set the bootstrap error: %w", updateErr)
 				}
-				return ctrl.Result{}, fmt.Errorf("failed to reconcile CAPI cluster: %w", err)
+				return ctrl.Result{}, fmt.Errorf("failed to check CAPI cluster: %w", err)
 			}
 			updateErr := r.updateStatus(ctx, bootstrap, bv1alpha1.Creating, "Creating cluster", false)
 			if updateErr != nil {
