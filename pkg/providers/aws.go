@@ -449,6 +449,8 @@ func (aws *AWSProvider) installSA(serviceAccounts []bv1alpha1.ClusterIAMServiceA
 	os.Setenv("AWS_SESSION_TOKEN", aws.SessionToken)
 	os.Setenv("AWS_REGION", aws.Region)
 
+	roleNamePrefix := aws.Data.Bootstrap.Spec.CloudSpec.AWS.IAMServiceAccount.RoleNamePrefix
+
 	aws.Data.Log.Info("Installing SA ...")
 	cmd := &cmdutils.Cmd{}
 	cfg := api.NewClusterConfig()
@@ -460,6 +462,11 @@ func (aws *AWSProvider) installSA(serviceAccounts []bv1alpha1.ClusterIAMServiceA
 	cfg.IAM.WithOIDC = api.Enabled()
 
 	for _, sa := range serviceAccounts {
+		if roleNamePrefix != nil {
+			if *roleNamePrefix != "" {
+				sa.RoleName = fmt.Sprintf("%s-%s", *roleNamePrefix, sa.Name)
+			}
+		}
 		serviceAccount := &api.ClusterIAMServiceAccount{
 			ClusterIAMMeta: api.ClusterIAMMeta{
 				Name:        sa.Name,
@@ -552,13 +559,26 @@ func (aws *AWSProvider) installSA(serviceAccounts []bv1alpha1.ClusterIAMServiceA
 }
 
 func (aws *AWSProvider) postInstall() error {
-	if len(aws.Data.Bootstrap.Spec.CloudSpec.AWS.ServiceAccounts) == 0 {
+	if len(aws.Data.Bootstrap.Spec.CloudSpec.AWS.IAMServiceAccount.ServiceAccounts) == 0 {
 		return nil
 	}
-	return aws.installSA(aws.Data.Bootstrap.Spec.CloudSpec.AWS.ServiceAccounts)
+	return aws.installSA(aws.Data.Bootstrap.Spec.CloudSpec.AWS.IAMServiceAccount.ServiceAccounts)
 }
 
 func (aws *AWSProvider) MigrateCluster() (*ctrl.Result, error) {
+
+	roleNamePrefix := aws.Data.Bootstrap.Spec.CloudSpec.AWS.IAMServiceAccount.RoleNamePrefix
+
+	var roleName string
+
+	if roleNamePrefix != nil {
+		if *roleNamePrefix != "" {
+			roleName = fmt.Sprintf("%s-capa-controller-manager", *roleNamePrefix)
+		}
+	} else {
+		roleName = "capa-controller-manager"
+	}
+
 	serviceAccounts := []bv1alpha1.ClusterIAMServiceAccount{
 		{
 			ClusterIAMMeta: bv1alpha1.ClusterIAMMeta{
@@ -567,7 +587,7 @@ func (aws *AWSProvider) MigrateCluster() (*ctrl.Result, error) {
 			},
 			AttachPolicyARNs:  []string{"arn:aws:iam::aws:policy/AdministratorAccess"},
 			WellKnownPolicies: bv1alpha1.WellKnownPolicies{},
-			RoleName:          "capa-controller-manager",
+			RoleName:          roleName,
 			RoleOnly:          true,
 		},
 	}
