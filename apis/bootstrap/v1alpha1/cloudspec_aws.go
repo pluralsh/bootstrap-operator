@@ -49,15 +49,24 @@ type AWSCloudSpec struct {
 	MachinePools            []AWSMachinePool `json:"machinePools"`
 	Region                  string           `json:"region"`
 	ClusterAPIComponentSpec `json:",inline"`
-	// ServiceAccounts specifies service accounts
+	// IAMServiceAccount specifies the configuration for IAM service accounts
 	// +optional
-	ServiceAccounts []ClusterIAMServiceAccount `json:"serviceAccounts,omitempty"`
+	IAMServiceAccount IAMServiceAccountSpec `json:"iamServiceAccount,omitempty"`
 	// +optional
 	Addons             []Addon                  `json:"addons,omitempty"`
 	AccessKeyIDRef     corev1.SecretKeySelector `json:"accessKeyIdRef"`
 	SecretAccessKeyRef corev1.SecretKeySelector `json:"secretAccessKeyRef"`
 	SessionTokenRef    corev1.SecretKeySelector `json:"sessionTokenRef"`
 	AWSAccountIDRef    corev1.SecretKeySelector `json:"accountIDRef"`
+}
+
+type IAMServiceAccountSpec struct {
+	// RoleNamePrefix specifies the prefix that will be added to the IAM role name
+	// +optional
+	RoleNamePrefix *string `json:"roleNamePrefix,omitempty"`
+	// ServiceAccounts specifies service accounts
+	// +optional
+	ServiceAccounts []ClusterIAMServiceAccount `json:"serviceAccounts,omitempty"`
 }
 
 type AWSMachinePool struct {
