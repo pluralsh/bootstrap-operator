@@ -3,6 +3,7 @@ package v1alpha1
 import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	runtime "k8s.io/apimachinery/pkg/runtime"
 )
 
 type Tags map[string]string
@@ -46,7 +47,8 @@ const (
 )
 
 type AWSCloudSpec struct {
-	MachinePools            []AWSMachinePool `json:"machinePools"`
+	// +optional
+	MachinePools            []AWSMachinePool `json:"machinePools,omitempty"`
 	Region                  string           `json:"region"`
 	ClusterAPIComponentSpec `json:",inline"`
 	// IAMServiceAccount specifies the configuration for IAM service accounts
@@ -206,7 +208,7 @@ type ClusterIAMServiceAccount struct {
 
 	// AttachPolicy holds a policy document to attach to this service account
 	// +optional
-	AttachPolicy string `json:"attachPolicy,omitempty"`
+	AttachPolicy *runtime.RawExtension `json:"attachPolicy,omitempty"`
 
 	// ARN of the role to attach to the service account
 	// +optional

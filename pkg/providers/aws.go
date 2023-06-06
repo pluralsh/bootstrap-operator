@@ -494,9 +494,9 @@ func (aws *AWSProvider) installSA(serviceAccounts []bv1alpha1.ClusterIAMServiceA
 			serviceAccount.RoleOnly = api.Disabled()
 		}
 
-		if sa.AttachPolicy != "" {
+		if sa.AttachPolicy != nil {
 			var attachPolicy map[string]interface{}
-			if err := yaml.Unmarshal([]byte(sa.AttachPolicy), &attachPolicy); err != nil {
+			if err := yaml.Unmarshal(sa.AttachPolicy.Raw, &attachPolicy); err != nil {
 				return err
 			}
 			serviceAccount.AttachPolicy = attachPolicy
