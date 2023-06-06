@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/base64"
 	"fmt"
-	"log"
 	"text/template"
 	"time"
 
@@ -18,6 +17,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/sts"
+	"github.com/aws/smithy-go/logging"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	awsinfrastructure "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
@@ -298,18 +298,32 @@ func (aws *AWSProvider) ReconcileCluster() error {
 }
 
 func GetAWSProvider(data *resources.TemplateData) (*AWSProvider, error) {
+	log := data.Log.WithName("AWS provider")
+
+	logger := logging.LoggerFunc(func(classification logging.Classification, format string, v ...interface{}) {
+		// your custom logging
+		log.WithName("Client").Info(format, v...)
+	})
+
 	spec := data.Bootstrap.Spec.CloudSpec.AWS
 
-	cfg, err := config.LoadDefaultConfig(data.Ctx, config.WithRegion(spec.Region))
+	cfg, err := config.LoadDefaultConfig(data.Ctx, config.WithRegion(spec.Region), config.WithLogger(logger))
 	if err != nil {
-		log.Fatalf("unable to load SDK config, %v", err)
+		log.Error(err, "unable to load SDK config")
+		return nil, err
 	}
+	log.V(1).Info("Successfully loaded SDK config")
 
 	sts := sts.NewFromConfig(cfg)
 
 	identiy, err := sts.GetCallerIdentity(data.Ctx, nil)
+	if err != nil {
+		log.Error(err, "unable to get caller identity")
+		return nil, err
+	}
+	log.V(1).Info("Successfully STS", "Account", *identiy.Account)
 
-	data.Log.WithName("AWS provider").Info("Create AWS provider")
+	log.Info("Create AWS provider")
 	return &AWSProvider{
 		Data:           data,
 		AccountID:      *identiy.Account,
