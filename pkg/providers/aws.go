@@ -49,14 +49,9 @@ aws_session_token = {{ .SessionToken }}
 `
 
 type AWSProvider struct {
-	Data      *resources.TemplateData
-	AWSConf   *aws.Config
-	AccountID string
-	// AccessKeyID     string
-	// SecretAccessKey string
-	// SessionToken    string
-	// Credentials     string
-	// Region         string
+	Data           *resources.TemplateData
+	AWSConf        *aws.Config
+	AccountID      string
 	version        string
 	fetchConfigURL string
 }
@@ -154,11 +149,23 @@ func (aws *AWSProvider) createCredentialSecret() error {
 		},
 	}
 
+	roleNamePrefix := aws.Data.Bootstrap.Spec.CloudSpec.AWS.IAMServiceAccount.RoleNamePrefix
+
+	var roleName string
+
+	if roleNamePrefix != nil {
+		if *roleNamePrefix != "" {
+			roleName = fmt.Sprintf("%s-capa-controller-manager", *roleNamePrefix)
+		}
+	} else {
+		roleName = "capa-controller-manager"
+	}
+
 	if aws.Data.Bootstrap.Spec.BootstrapMode {
 		secret.Data["AWS_B64ENCODED_CREDENTIALS"] = []byte(credentials)
 	} else {
 		secret.Data["AWS_B64ENCODED_CREDENTIALS"] = []byte("")
-		secret.Data["AWS_CONTROLLER_IAM_ROLE"] = []byte(fmt.Sprintf("arn:aws:iam::%s:role/capa-controller-manager", aws.AccountID))
+		secret.Data["AWS_CONTROLLER_IAM_ROLE"] = []byte(fmt.Sprintf("arn:aws:iam::%s:role/%s", aws.AccountID, roleName))
 	}
 
 	if err := aws.Data.Client.Create(aws.Data.Ctx, &secret); err != nil {
@@ -209,6 +216,9 @@ func (aws *AWSProvider) Secret() string {
 }
 
 func (aws *AWSProvider) CheckCluster() (*ctrl.Result, error) {
+	if err := aws.postInstall(); err != nil {
+		return nil, err
+	}
 	var cluster clusterapiv1beta1.Cluster
 	if err := aws.Data.Client.Get(aws.Data.Ctx, ctrlruntimeclient.ObjectKey{Namespace: aws.Data.Namespace, Name: aws.Data.Bootstrap.Spec.ClusterName}, &cluster); err != nil {
 		return nil, err
@@ -620,35 +630,35 @@ func (aws *AWSProvider) postInstall() error {
 
 func (aws *AWSProvider) MigrateCluster() (*ctrl.Result, error) {
 
-	roleNamePrefix := aws.Data.Bootstrap.Spec.CloudSpec.AWS.IAMServiceAccount.RoleNamePrefix
+	// roleNamePrefix := aws.Data.Bootstrap.Spec.CloudSpec.AWS.IAMServiceAccount.RoleNamePrefix
 
-	var roleName string
+	// var roleName string
 
-	if roleNamePrefix != nil {
-		if *roleNamePrefix != "" {
-			roleName = fmt.Sprintf("%s-capa-controller-manager", *roleNamePrefix)
-		}
-	} else {
-		roleName = "capa-controller-manager"
-	}
+	// if roleNamePrefix != nil {
+	// 	if *roleNamePrefix != "" {
+	// 		roleName = fmt.Sprintf("%s-capa-controller-manager", *roleNamePrefix)
+	// 	}
+	// } else {
+	// 	roleName = "capa-controller-manager"
+	// }
 
-	serviceAccounts := []bv1alpha1.ClusterIAMServiceAccount{
-		{
-			ClusterIAMMeta: bv1alpha1.ClusterIAMMeta{
-				Name:      "capa-controller-manager",
-				Namespace: aws.Data.Namespace,
-			},
-			AttachPolicyARNs:  []string{"arn:aws:iam::aws:policy/AdministratorAccess"},
-			WellKnownPolicies: bv1alpha1.WellKnownPolicies{},
-			RoleName:          roleName,
-			RoleOnly:          true,
-		},
-	}
+	// serviceAccounts := []bv1alpha1.ClusterIAMServiceAccount{
+	// 	{
+	// 		ClusterIAMMeta: bv1alpha1.ClusterIAMMeta{
+	// 			Name:      "capa-controller-manager",
+	// 			Namespace: aws.Data.Namespace,
+	// 		},
+	// 		AttachPolicyARNs:  []string{"arn:aws:iam::aws:policy/AdministratorAccess"},
+	// 		WellKnownPolicies: bv1alpha1.WellKnownPolicies{},
+	// 		RoleName:          roleName,
+	// 		RoleOnly:          true,
+	// 	},
+	// }
 
-	if err := aws.installSA(serviceAccounts); err != nil {
-		return &ctrl.Result{
-			RequeueAfter: 5 * time.Second,
-		}, nil
-	}
+	// if err := aws.installSA(serviceAccounts); err != nil {
+	// 	return &ctrl.Result{
+	// 		RequeueAfter: 5 * time.Second,
+	// 	}, nil
+	// }
 	return nil, nil
 }
