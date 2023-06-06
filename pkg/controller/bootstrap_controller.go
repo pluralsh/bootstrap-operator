@@ -11,9 +11,17 @@ import (
 	"go.uber.org/zap"
 	appsv1 "k8s.io/api/apps/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
+	clusterapiv1beta1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
 // Reconciler reconciles a DatabaseRequest object
@@ -234,5 +242,42 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&bv1alpha1.Bootstrap{}).
 		Owns(&appsv1.Deployment{}).
+		Watches(
+			&source.Kind{Type: &clusterapiv1beta1.Cluster{}},
+			handler.EnqueueRequestsFromMapFunc(r.findClusterObject),
+			builder.WithPredicates(predicate.ResourceVersionChangedPredicate{}),
+		).
+		// Watches(
+		// 	&source.Kind{Type: &corev1.ConfigMap{}},
+		// 	handler.EnqueueRequestsFromMapFunc(r.findObjectsForConfigMap),
+		// 	builder.WithPredicates(predicate.ResourceVersionChangedPredicate{}),
+		// ).
 		Complete(r)
+}
+
+const (
+	clusterNameField = ".spec.clusterName"
+)
+
+func (r *Reconciler) findClusterObject(cluster client.Object) []reconcile.Request {
+	attachedBootstraps := &bv1alpha1.BootstrapList{}
+	listOps := &client.ListOptions{
+		FieldSelector: fields.OneTermEqualSelector(clusterNameField, cluster.GetName()),
+		Namespace:     cluster.GetNamespace(),
+	}
+	err := r.List(context.TODO(), attachedBootstraps, listOps)
+	if err != nil {
+		return []reconcile.Request{}
+	}
+
+	requests := make([]reconcile.Request, len(attachedBootstraps.Items))
+	for i, item := range attachedBootstraps.Items {
+		requests[i] = reconcile.Request{
+			NamespacedName: types.NamespacedName{
+				Name:      item.GetName(),
+				Namespace: item.GetNamespace(),
+			},
+		}
+	}
+	return requests
 }

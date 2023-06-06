@@ -24,8 +24,7 @@ import (
 	"sigs.k8s.io/cluster-api-provider-aws/v2/cmd/clusterawsadm/cloudformation/bootstrap"
 	awscontrolplane "sigs.k8s.io/cluster-api-provider-aws/v2/controlplane/eks/api/v1beta2"
 	awsmachinepool "sigs.k8s.io/cluster-api-provider-aws/v2/exp/api/v1beta2"
-	clusterapi "sigs.k8s.io/cluster-api/api/v1beta1"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	clusterapiv1beta1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	clusterapiexp "sigs.k8s.io/cluster-api/exp/api/v1beta1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -210,7 +209,7 @@ func (aws *AWSProvider) Secret() string {
 }
 
 func (aws *AWSProvider) CheckCluster() (*ctrl.Result, error) {
-	var cluster clusterapi.Cluster
+	var cluster clusterapiv1beta1.Cluster
 	if err := aws.Data.Client.Get(aws.Data.Ctx, ctrlruntimeclient.ObjectKey{Namespace: aws.Data.Namespace, Name: aws.Data.Bootstrap.Spec.ClusterName}, &cluster); err != nil {
 		return nil, err
 	}
@@ -218,7 +217,7 @@ func (aws *AWSProvider) CheckCluster() (*ctrl.Result, error) {
 		return nil, err
 	}
 	for _, cond := range cluster.Status.Conditions {
-		if cond.Type == clusterv1.ReadyCondition && cond.Status == corev1.ConditionTrue {
+		if cond.Type == clusterapiv1beta1.ReadyCondition && cond.Status == corev1.ConditionTrue {
 			if err := aws.postInstall(); err != nil {
 				return nil, err
 			}
@@ -240,7 +239,7 @@ func (aws *AWSProvider) setStatusReady() error {
 	})
 }
 
-func (aws *AWSProvider) updateClusterStatus(status clusterapi.ClusterStatus) error {
+func (aws *AWSProvider) updateClusterStatus(status clusterapiv1beta1.ClusterStatus) error {
 	err := helper.UpdateBootstrapStatus(aws.Data.Ctx, aws.Data.Client, aws.Data.Bootstrap, func(c *bv1alpha1.Bootstrap) {
 		if c.Status.CapiClusterStatus == nil {
 			c.Status.CapiClusterStatus = &bv1alpha1.ClusterStatus{}
@@ -322,23 +321,23 @@ func GetAWSProvider(data *resources.TemplateData) (*AWSProvider, error) {
 
 func awsClusterCreator(data *resources.TemplateData) reconciling.NamedClusterCreatorGetter {
 	return func() (string, reconciling.ClusterCreator) {
-		return data.Bootstrap.Spec.ClusterName, func(c *clusterapi.Cluster) (*clusterapi.Cluster, error) {
+		return data.Bootstrap.Spec.ClusterName, func(c *clusterapiv1beta1.Cluster) (*clusterapiv1beta1.Cluster, error) {
 			name := data.Bootstrap.Spec.ClusterName
 			c.Name = name
 			c.Namespace = data.Namespace
-			c.Spec = clusterapi.ClusterSpec{
-				ClusterNetwork: &clusterapi.ClusterNetwork{
+			c.Spec = clusterapiv1beta1.ClusterSpec{
+				ClusterNetwork: &clusterapiv1beta1.ClusterNetwork{
 					APIServerPort: data.Bootstrap.Spec.ClusterNetwork.APIServerPort,
 					ServiceDomain: data.Bootstrap.Spec.ClusterNetwork.ServiceDomain,
 				},
 			}
 			if data.Bootstrap.Spec.ClusterNetwork.Pods != nil {
-				c.Spec.ClusterNetwork.Pods = &clusterapi.NetworkRanges{
+				c.Spec.ClusterNetwork.Pods = &clusterapiv1beta1.NetworkRanges{
 					CIDRBlocks: data.Bootstrap.Spec.ClusterNetwork.Pods.CIDRBlocks,
 				}
 			}
 			if data.Bootstrap.Spec.ClusterNetwork.Services != nil {
-				c.Spec.ClusterNetwork.Services = &clusterapi.NetworkRanges{
+				c.Spec.ClusterNetwork.Services = &clusterapiv1beta1.NetworkRanges{
 					CIDRBlocks: data.Bootstrap.Spec.ClusterNetwork.Services.CIDRBlocks,
 				}
 			}
@@ -407,9 +406,9 @@ func awsMachinePoolCreator(mp bv1alpha1.AWSMachinePool, namespace, clusterName s
 			c.Spec = clusterapiexp.MachinePoolSpec{
 				ClusterName: clusterName,
 				Replicas:    mp.Replicas,
-				Template: clusterapi.MachineTemplateSpec{
-					Spec: clusterapi.MachineSpec{
-						Bootstrap: clusterapi.Bootstrap{
+				Template: clusterapiv1beta1.MachineTemplateSpec{
+					Spec: clusterapiv1beta1.MachineSpec{
+						Bootstrap: clusterapiv1beta1.Bootstrap{
 							DataSecretName: resources.StrPtr(""),
 						},
 						ClusterName: clusterName,
