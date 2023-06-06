@@ -1,9 +1,11 @@
 package providers
 
 import (
+	"bytes"
+	"encoding/base64"
 	"fmt"
-	"os"
-	"strings"
+	"log"
+	"text/template"
 	"time"
 
 	"github.com/weaveworks/eksctl/pkg/actions/irsa"
@@ -13,16 +15,13 @@ import (
 	infrav1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 	"sigs.k8s.io/yaml"
 
-	awsv1 "github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/credentials"
-	"github.com/aws/aws-sdk-go/aws/session"
-	cfn "github.com/aws/aws-sdk-go/service/cloudformation"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/sts"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	awsinfrastructure "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 	"sigs.k8s.io/cluster-api-provider-aws/v2/cmd/clusterawsadm/cloudformation/bootstrap"
-	cloudformation "sigs.k8s.io/cluster-api-provider-aws/v2/cmd/clusterawsadm/cloudformation/service"
-	creds "sigs.k8s.io/cluster-api-provider-aws/v2/cmd/clusterawsadm/credentials"
 	awscontrolplane "sigs.k8s.io/cluster-api-provider-aws/v2/controlplane/eks/api/v1beta2"
 	awsmachinepool "sigs.k8s.io/cluster-api-provider-aws/v2/exp/api/v1beta2"
 	clusterapi "sigs.k8s.io/cluster-api/api/v1beta1"
@@ -37,16 +36,71 @@ import (
 	"github.com/pluralsh/bootstrap-operator/pkg/resources/reconciling"
 )
 
+// AWSCredentialsTemplate generates an AWS credentials file that can
+// be loaded by the various SDKs.
+//
+//nolint:gosec
+const AWSCredentialsTemplate = `[default]
+aws_access_key_id = {{ .AccessKeyID }}
+aws_secret_access_key = {{ .SecretAccessKey }}
+region = {{ .Region }}
+{{if .SessionToken }}
+aws_session_token = {{ .SessionToken }}
+{{end}}
+`
+
 type AWSProvider struct {
-	Data            *resources.TemplateData
-	AccountID       string
-	AccessKeyID     string
-	SecretAccessKey string
-	SessionToken    string
-	Credentials     string
-	Region          string
-	version         string
-	fetchConfigURL  string
+	Data      *resources.TemplateData
+	AWSConf   *aws.Config
+	AccountID string
+	// AccessKeyID     string
+	// SecretAccessKey string
+	// SessionToken    string
+	// Credentials     string
+	// Region         string
+	version        string
+	fetchConfigURL string
+}
+
+type CredsInput struct {
+	aws.Credentials
+	Region string
+}
+
+// // RenderAWSDefaultProfile will render the AWS default profile.
+func (c AWSProvider) RenderAWSDefaultProfile() (string, error) {
+	tmpl, err := template.New("AWS Credentials").Parse(AWSCredentialsTemplate)
+	if err != nil {
+		return "", err
+	}
+
+	creds, err := c.AWSConf.Credentials.Retrieve(c.Data.Ctx)
+	if err != nil {
+		return "", err
+	}
+
+	credsInput := CredsInput{
+		creds,
+		c.AWSConf.Region,
+	}
+
+	var credsFileStr bytes.Buffer
+	err = tmpl.Execute(&credsFileStr, credsInput)
+	if err != nil {
+		return "", err
+	}
+
+	return credsFileStr.String(), nil
+}
+
+// RenderBase64EncodedAWSDefaultProfile will render the AWS default profile, encoded in base 64.
+func (c AWSProvider) RenderBase64EncodedAWSDefaultProfile() (string, error) {
+	profile, err := c.RenderAWSDefaultProfile()
+	if err != nil {
+		return "", err
+	}
+
+	return base64.StdEncoding.EncodeToString([]byte(profile)), nil
 }
 
 const (
@@ -67,30 +121,22 @@ func (aws *AWSProvider) FetchConfigURL() string {
 
 func (aws *AWSProvider) createCredentialSecret() error {
 
-	os.Setenv("AWS_ACCESS_KEY_ID", aws.AccessKeyID)
-	os.Setenv("AWS_SECRET_ACCESS_KEY", aws.SecretAccessKey)
-	os.Setenv("AWS_SESSION_TOKEN", aws.SessionToken)
+	// os.Setenv("AWS_ACCESS_KEY_ID", aws.AccessKeyID)
+	// os.Setenv("AWS_SECRET_ACCESS_KEY", aws.SecretAccessKey)
+	// os.Setenv("AWS_SESSION_TOKEN", aws.SessionToken)
 
 	t := bootstrap.NewTemplate()
-	t.Spec.Region = aws.Region
+	t.Spec.Region = aws.AWSConf.Region
 
-	config := awsv1.
-		NewConfig().
-		WithRegion(aws.Region).
-		WithCredentials(credentials.NewStaticCredentials(aws.AccessKeyID, aws.SecretAccessKey, aws.SessionToken)).
-		WithMaxRetries(3)
+	// cfnSvc := cloudformation.NewService(cfn.NewFromConfig(cfg))
+	// cfnSvc.ReconcileBootstrapStack(t.Spec.StackName, *t.RenderCloudFormation(), t.Spec.StackTags)
+	// // awsCreds, err := cfg.Credentials.Retrieve(aws.Data.Ctx)
+	// awsCreds, err := creds.NewAWSCredentialFromDefaultChain(aws.Region)
+	// if err != nil {
+	// 	return err
+	// }
 
-	sess, err := session.NewSession(config)
-	if err != nil {
-		return err
-	}
-	cfnSvc := cloudformation.NewService(cfn.New(sess))
-	cfnSvc.ReconcileBootstrapStack(t.Spec.StackName, *t.RenderCloudFormation(), t.Spec.StackTags)
-	awsCreds, err := creds.NewAWSCredentialFromDefaultChain(aws.Region)
-	if err != nil {
-		return err
-	}
-	credentials, err := awsCreds.RenderBase64EncodedAWSDefaultProfile()
+	credentials, err := aws.RenderBase64EncodedAWSDefaultProfile()
 	if err != nil {
 		return err
 	}
@@ -103,7 +149,7 @@ func (aws *AWSProvider) createCredentialSecret() error {
 		Data: map[string][]byte{
 			"CAPA_EKS_ADD_ROLES":       []byte("true"),
 			"CAPA_EKS_IAM":             []byte("true"),
-			"AWS_REGION":               []byte(aws.Region),
+			"AWS_REGION":               []byte(aws.AWSConf.Region),
 			"EXP_MACHINE_POOL":         []byte("true"),
 			"EXP_EXTERNAL_RESOURCE_GC": []byte("true"),
 		},
@@ -255,24 +301,22 @@ func (aws *AWSProvider) ReconcileCluster() error {
 func GetAWSProvider(data *resources.TemplateData) (*AWSProvider, error) {
 	spec := data.Bootstrap.Spec.CloudSpec.AWS
 
-	var secret corev1.Secret
-	if err := data.Client.Get(data.Ctx, ctrlruntimeclient.ObjectKey{Namespace: data.Namespace, Name: spec.AccessKeyIDRef.Name}, &secret); err != nil {
-		return nil, err
+	cfg, err := config.LoadDefaultConfig(data.Ctx, config.WithRegion(spec.Region))
+	if err != nil {
+		log.Fatalf("unable to load SDK config, %v", err)
 	}
-	accessKeyID := strings.TrimSpace(string(secret.Data[spec.AccessKeyIDRef.Key]))
-	secretAccessKey := strings.TrimSpace(string(secret.Data[spec.SecretAccessKeyRef.Key]))
-	sessionToken := strings.TrimSpace(string(secret.Data[spec.SessionTokenRef.Key]))
-	accountID := strings.TrimSpace(string(secret.Data[spec.AWSAccountIDRef.Key]))
+
+	sts := sts.NewFromConfig(cfg)
+
+	identiy, err := sts.GetCallerIdentity(data.Ctx, nil)
+
 	data.Log.Named("AWS provider").Info("Create AWS provider")
 	return &AWSProvider{
-		Data:            data,
-		AccountID:       accountID,
-		AccessKeyID:     accessKeyID,
-		SecretAccessKey: secretAccessKey,
-		SessionToken:    sessionToken,
-		Region:          spec.Region,
-		version:         spec.Version,
-		fetchConfigURL:  spec.FetchConfigURL,
+		Data:           data,
+		AccountID:      *identiy.Account,
+		AWSConf:        &cfg,
+		version:        spec.Version,
+		fetchConfigURL: spec.FetchConfigURL,
 	}, nil
 }
 
@@ -444,10 +488,6 @@ func awsAWSManagedMachinePoolCreator(mp bv1alpha1.AWSMachinePool, namespace stri
 }
 
 func (aws *AWSProvider) installSA(serviceAccounts []bv1alpha1.ClusterIAMServiceAccount) error {
-	os.Setenv("AWS_ACCESS_KEY_ID", aws.AccessKeyID)
-	os.Setenv("AWS_SECRET_ACCESS_KEY", aws.SecretAccessKey)
-	os.Setenv("AWS_SESSION_TOKEN", aws.SessionToken)
-	os.Setenv("AWS_REGION", aws.Region)
 
 	roleNamePrefix := aws.Data.Bootstrap.Spec.CloudSpec.AWS.IAMServiceAccount.RoleNamePrefix
 
@@ -456,7 +496,7 @@ func (aws *AWSProvider) installSA(serviceAccounts []bv1alpha1.ClusterIAMServiceA
 	cfg := api.NewClusterConfig()
 	cmd.ClusterConfig = cfg
 	cmd.ClusterConfig.Metadata.Name = aws.Data.Bootstrap.Spec.ClusterName
-	cmd.ClusterConfig.Metadata.Region = aws.Region
+	cmd.ClusterConfig.Metadata.Region = aws.AWSConf.Region
 	cmd.ProviderConfig.WaitTimeout = time.Minute * 5
 
 	cfg.IAM.WithOIDC = api.Enabled()
