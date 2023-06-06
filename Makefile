@@ -56,6 +56,10 @@ docker-push: ## Push docker image with the driver.
 build: manifests generate fmt vet ## Build controller.
 	go build -o bin/dash-controller cmd/main.go
 
+.PHONY: run
+run: manifests generate fmt vet ## Run a controller from your host.
+	go run ./cmd/main.go --namespace bootstrap -zap-devel -zap-log-level 2
+
 # go-get-tool will 'go get' any package $2 and install it to $1.
 PROJECT_DIR := $(shell dirname $(abspath $(lastword $(MAKEFILE_LIST))))
 define go-get-tool

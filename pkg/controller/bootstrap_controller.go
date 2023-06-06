@@ -8,7 +8,6 @@ import (
 	"github.com/pluralsh/bootstrap-operator/apis/bootstrap/helper"
 
 	bv1alpha1 "github.com/pluralsh/bootstrap-operator/apis/bootstrap/v1alpha1"
-	"go.uber.org/zap"
 	appsv1 "k8s.io/api/apps/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/fields"
@@ -19,6 +18,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
@@ -27,13 +27,13 @@ import (
 // Reconciler reconciles a DatabaseRequest object
 type Reconciler struct {
 	client.Client
-	Log        *zap.SugaredLogger
 	Namespace  string
 	Scheme     *runtime.Scheme
 	Kubeconfig string
 }
 
 func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+	log := log.FromContext(ctx)
 	bootstrap := &bv1alpha1.Bootstrap{}
 	if err := r.Get(ctx, req.NamespacedName, bootstrap); err != nil {
 		if apierrors.IsNotFound(err) {
@@ -47,7 +47,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	}
 
 	if !r.CheckCertManager(ctx) {
-		r.Log.Info("Waiting for cert manager")
+		log.Info("Waiting for cert manager")
 		return ctrl.Result{
 			RequeueAfter: 5 * time.Second,
 		}, nil

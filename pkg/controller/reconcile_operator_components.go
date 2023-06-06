@@ -16,9 +16,12 @@ import (
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 func (r *Reconciler) checkOperatorComponents(ctx context.Context, bootstrap *bv1alpha1.Bootstrap) (*ctrl.Result, error) {
+	log := log.FromContext(ctx)
+
 	var cp clusterapioperator.CoreProvider
 	var ip clusterapioperator.InfrastructureProvider
 	var bp clusterapioperator.BootstrapProvider
@@ -29,7 +32,7 @@ func (r *Reconciler) checkOperatorComponents(ctx context.Context, bootstrap *bv1
 		Client:    r.Client,
 		Bootstrap: bootstrap,
 		Namespace: r.Namespace,
-		Log:       r.Log,
+		Log:       log,
 	})
 	if err != nil {
 		return nil, err
@@ -86,12 +89,13 @@ func isReady(conditions clusterv1.Conditions) bool {
 }
 
 func (r *Reconciler) reconcileOperatorComponents(ctx context.Context, bootstrap *bv1alpha1.Bootstrap) (*ctrl.Result, error) {
+	log := log.FromContext(ctx)
 	data := &resources.TemplateData{
 		Ctx:       ctx,
 		Bootstrap: bootstrap,
 		Namespace: r.Namespace,
 		Client:    r.Client,
-		Log:       r.Log,
+		Log:       log,
 	}
 
 	bootstrapProviderCreator := []reconciling.NamedBootstrapProviderCreatorGetter{

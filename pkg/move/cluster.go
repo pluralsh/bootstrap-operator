@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/go-logr/logr"
 	bv1alpha1 "github.com/pluralsh/bootstrap-operator/apis/bootstrap/v1alpha1"
 
 	apiclient "sigs.k8s.io/cluster-api/cmd/clusterctl/client"
 
-	"go.uber.org/zap"
 	coreapi "k8s.io/api/core/v1"
 
 	"k8s.io/apimachinery/pkg/runtime"
@@ -26,7 +26,7 @@ type Cluster struct {
 	Scheme      *runtime.Scheme
 	Client      ctrlruntimeclient.Client
 	Ctx         context.Context
-	Log         *zap.SugaredLogger
+	Log         logr.Logger
 }
 
 func (c *Cluster) GetClient() (ctrlruntimeclient.Client, error) {
@@ -37,19 +37,19 @@ func (c *Cluster) GetClient() (ctrlruntimeclient.Client, error) {
 	}
 	cfg, err := clientcmd.Load(rawKubeconfig)
 	if err != nil {
-		c.Log.Error("failed to load config")
+		c.Log.Error(err, "failed to load config")
 		return nil, err
 	}
 	clientConfig, err := getRestConfig(cfg)
 	if err != nil {
-		c.Log.Error("failed to get rest config")
+		c.Log.Error(err, "failed to get rest config")
 		return nil, err
 	}
 	client, err := ctrlruntimeclient.New(clientConfig, ctrlruntimeclient.Options{
 		Scheme: c.Scheme,
 	})
 	if err != nil {
-		c.Log.Error("failed to create client")
+		c.Log.Error(err, "failed to create client")
 		return nil, err
 	}
 	return client, nil
@@ -77,7 +77,7 @@ func (c *Cluster) MoveClusterAPI() error {
 
 	var kubeconfigSecret coreapi.Secret
 	if err := c.Client.Get(c.Ctx, ctrlruntimeclient.ObjectKey{Name: "kubeconfig", Namespace: c.Namespace}, &kubeconfigSecret); err != nil {
-		c.Log.Error("failed to get bootstrap cluster kubeconfig")
+		c.Log.Error(err, "failed to get bootstrap cluster kubeconfig")
 		return err
 	}
 	fromConfig := kubeconfigSecret.Data["value"]

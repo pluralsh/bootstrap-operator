@@ -3,25 +3,28 @@ package controller
 import (
 	"context"
 	"fmt"
+	"time"
+
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
-	"time"
 
 	"github.com/pluralsh/bootstrap-operator/apis/bootstrap/helper"
 	bv1alpha1 "github.com/pluralsh/bootstrap-operator/apis/bootstrap/v1alpha1"
 	"github.com/pluralsh/bootstrap-operator/pkg/providers"
 	"github.com/pluralsh/bootstrap-operator/pkg/resources"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 func (r *Reconciler) reconcileCluster(ctx context.Context, bootstrap *bv1alpha1.Bootstrap) (*ctrl.Result, error) {
+	log := log.FromContext(ctx)
 	provider, err := providers.GetProvider(&resources.TemplateData{
 		Ctx:       ctx,
 		Client:    r.Client,
 		Bootstrap: bootstrap,
 		Namespace: r.Namespace,
-		Log:       r.Log,
+		Log:       log,
 	})
 	if err != nil {
 		return nil, err
@@ -33,12 +36,13 @@ func (r *Reconciler) reconcileCluster(ctx context.Context, bootstrap *bv1alpha1.
 }
 
 func (r *Reconciler) checkCluster(ctx context.Context, bootstrap *bv1alpha1.Bootstrap) (*ctrl.Result, error) {
+	log := log.FromContext(ctx)
 	provider, err := providers.GetProvider(&resources.TemplateData{
 		Ctx:       ctx,
 		Client:    r.Client,
 		Bootstrap: bootstrap,
 		Namespace: r.Namespace,
-		Log:       r.Log,
+		Log:       log,
 	})
 	if err != nil {
 		return nil, err
@@ -47,12 +51,13 @@ func (r *Reconciler) checkCluster(ctx context.Context, bootstrap *bv1alpha1.Boot
 }
 
 func (r *Reconciler) migration(ctx context.Context, bootstrap *bv1alpha1.Bootstrap) (*ctrl.Result, error) {
+	log := log.FromContext(ctx)
 	provider, err := providers.GetProvider(&resources.TemplateData{
 		Ctx:       ctx,
 		Client:    r.Client,
 		Bootstrap: bootstrap,
 		Namespace: r.Namespace,
-		Log:       r.Log,
+		Log:       log,
 	})
 	if err != nil {
 		return nil, err
@@ -63,14 +68,14 @@ func (r *Reconciler) migration(ctx context.Context, bootstrap *bv1alpha1.Bootstr
 		if !apierrors.IsNotFound(err) {
 			return nil, fmt.Errorf("failed to get pods: %w", err)
 		}
-		r.Log.Info("Waiting for infrastructure operator ...")
+		log.Info("Waiting for infrastructure operator ...")
 		return &ctrl.Result{
 			RequeueAfter: 5 * time.Second,
 		}, nil
 	}
 	if len(pods.Items) > 0 {
 		if isPodReady(pods.Items[0].Status.Conditions) {
-			r.Log.Info("Infrastructure operator ready")
+			log.Info("Infrastructure operator ready")
 			return provider.MigrateCluster()
 		}
 	}

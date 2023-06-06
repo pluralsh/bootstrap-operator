@@ -224,7 +224,7 @@ func (aws *AWSProvider) CheckCluster() (*ctrl.Result, error) {
 			return nil, aws.setStatusReady()
 		}
 	}
-	aws.Data.Log.Named("AWS provider").Info("Waiting for AWS cluster to become ready")
+	aws.Data.Log.WithName("AWS provider").Info("Waiting for AWS cluster to become ready")
 	return &ctrl.Result{
 		RequeueAfter: 10 * time.Second,
 	}, nil
@@ -309,7 +309,7 @@ func GetAWSProvider(data *resources.TemplateData) (*AWSProvider, error) {
 
 	identiy, err := sts.GetCallerIdentity(data.Ctx, nil)
 
-	data.Log.Named("AWS provider").Info("Create AWS provider")
+	data.Log.WithName("AWS provider").Info("Create AWS provider")
 	return &AWSProvider{
 		Data:           data,
 		AccountID:      *identiy.Account,

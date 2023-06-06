@@ -10,15 +10,18 @@ import (
 	bv1alpha1 "github.com/pluralsh/bootstrap-operator/apis/bootstrap/v1alpha1"
 	"github.com/pluralsh/bootstrap-operator/pkg/resources"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 func (r *Reconciler) initProvider(ctx context.Context, bootstrap *bv1alpha1.Bootstrap) (*ctrl.Result, error) {
+	log := log.FromContext(ctx)
+
 	data := &resources.TemplateData{
 		Ctx:       ctx,
 		Bootstrap: bootstrap,
 		Namespace: r.Namespace,
 		Client:    r.Client,
-		Log:       r.Log,
+		Log:       log,
 	}
 	prov, err := providers.GetProvider(data)
 	if err != nil {

@@ -134,16 +134,16 @@ func (gcp *GCPProvider) CheckCluster() (*ctrl.Result, error) {
 	}
 
 	if *status != corev1.ConditionTrue {
-		gcp.Data.Log.Named("GCP provider").Info("Waiting for cluster to become ready...")
+		gcp.Data.Log.WithName("GCP provider").Info("Waiting for cluster to become ready...")
 		return &ctrl.Result{RequeueAfter: 10 * time.Second}, nil
 	}
 
-	gcp.Data.Log.Named("GCP provider").Info("Cluster provisioned. Running preflight checks...")
+	gcp.Data.Log.WithName("GCP provider").Info("Cluster provisioned. Running preflight checks...")
 	if res, err := gcp.runClusterPreflightChecks(); err != nil || res != nil {
 		return res, err
 	}
 
-	gcp.Data.Log.Named("GCP provider").Info("Updating cluster object Ready status to true")
+	gcp.Data.Log.WithName("GCP provider").Info("Updating cluster object Ready status to true")
 	return nil, gcp.setStatusReady()
 }
 
@@ -238,7 +238,7 @@ func GetGCPProvider(data *resources.TemplateData) (*GCPProvider, error) {
 		return nil, fmt.Errorf("could not create gcp client: %s", err)
 	}
 
-	data.Log.Named("GCP provider").Info("Create GCP provider")
+	data.Log.WithName("GCP provider").Info("Create GCP provider")
 	return &GCPProvider{
 		Data:           data,
 		Credentials:    credentials,
@@ -412,7 +412,7 @@ func (gcp *GCPProvider) runClusterPreflightChecks() (*ctrl.Result, error) {
 	}
 
 	if !running {
-		gcp.Data.Log.Named("GCP provider").Info("Waiting for cluster to be in running state...")
+		gcp.Data.Log.WithName("GCP provider").Info("Waiting for cluster to be in running state...")
 		return &ctrl.Result{RequeueAfter: 15 * time.Second}, nil
 	}
 

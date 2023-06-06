@@ -13,10 +13,13 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 func (r *Reconciler) reconcileOperator(ctx context.Context, bootstrap *bv1alpha1.Bootstrap) (*ctrl.Result, error) {
+	log := log.FromContext(ctx)
 	if err := r.ensureOperatorResourcesAreDeployed(ctx, bootstrap, r.Namespace); err != nil {
+		log.Error(err, "Failed to deploy operator resources")
 		return nil, err
 	}
 
@@ -104,6 +107,7 @@ func (r *Reconciler) ensureOperatorResourcesAreDeployed(ctx context.Context, boo
 }
 
 func (r *Reconciler) updateOperatorStatus(ctx context.Context, bootstrap *bv1alpha1.Bootstrap, phase bv1alpha1.ComponentPhase, message string, ready bool) error {
+	log := log.FromContext(ctx)
 	err := helper.UpdateBootstrapStatus(ctx, r.Client, bootstrap, func(c *bv1alpha1.Bootstrap) {
 		if c.Status.CapiOperatorStatus == nil {
 			c.Status.CapiOperatorStatus = &bv1alpha1.Status{}
@@ -114,6 +118,7 @@ func (r *Reconciler) updateOperatorStatus(ctx context.Context, bootstrap *bv1alp
 
 	})
 	if err != nil {
+		log.Error(err, "Could not update bootstrap", "Failed to set error status on bootstrap", message)
 		return fmt.Errorf("failed to set error status on bootstrap to: errorMessage=%q. Could not update cluster: %w", message, err)
 	}
 
