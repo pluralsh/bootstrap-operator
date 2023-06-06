@@ -46,6 +46,8 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		return ctrl.Result{}, nil
 	}
 
+	log.Info("Reconciling bootstrap", "name", bootstrap.GetName())
+
 	if !r.CheckCertManager(ctx) {
 		log.Info("Waiting for cert manager")
 		return ctrl.Result{
@@ -55,6 +57,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 
 	if bootstrap.Status.CapiOperatorStatus == nil {
 		if err := r.updateOperatorStatus(ctx, bootstrap, bv1alpha1.Creating, "creating CAPI operator", false); err != nil {
+			log.Error(err, "failed to set the bootstrap error")
 			return ctrl.Result{}, err
 		}
 	}
