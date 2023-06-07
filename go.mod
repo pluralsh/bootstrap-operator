@@ -28,6 +28,8 @@ require (
 	sigs.k8s.io/yaml v1.3.0
 )
 
+require github.com/awslabs/smithy-go v0.4.0 // indirect
+
 require (
 	cloud.google.com/go/compute v1.19.2 // indirect
 	cloud.google.com/go/compute/metadata v0.2.3 // indirect
@@ -57,6 +59,7 @@ require (
 	github.com/aws/amazon-vpc-cni-k8s v1.12.0 // indirect
 	github.com/aws/aws-sdk-go v1.44.225 // indirect
 	github.com/aws/aws-sdk-go-v2/credentials v1.13.17 // indirect
+	github.com/aws/aws-sdk-go-v2/ec2imds v0.1.5
 	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.13.0 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/configsources v1.1.31 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.4.25 // indirect

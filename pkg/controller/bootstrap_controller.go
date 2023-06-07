@@ -13,6 +13,7 @@ import (
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/kubernetes"
 	clusterapiv1beta1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
@@ -24,9 +25,17 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
+const (
+	clusterNameField = ".spec.clusterName"
+	// eksLabel         = "eks.amazonaws.com/capacityType"
+	// gkeLabel         = "cloud.google.com/gke-os-distribution"
+	// aksLabel         = "kubernetes.azure.com/os"
+)
+
 // Reconciler reconciles a DatabaseRequest object
 type Reconciler struct {
 	client.Client
+	KubeClient *kubernetes.Clientset
 	Namespace  string
 	Scheme     *runtime.Scheme
 	Kubeconfig string
@@ -40,6 +49,20 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 			return ctrl.Result{}, nil
 		}
 		return ctrl.Result{}, err
+	}
+
+	var kindNet appsv1.DaemonSet
+
+	err := r.Client.Get(ctx, types.NamespacedName{Name: "kindnet", Namespace: "kube-system"}, &kindNet)
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			log.Info("Not running in kind")
+			return ctrl.Result{}, nil
+		}
+		log.Error(err, "failed to get kindnet daemonset")
+		return ctrl.Result{}, err
+	} else {
+		log.Info("Running in kind")
 	}
 
 	if !bootstrap.GetDeletionTimestamp().IsZero() {
@@ -257,10 +280,6 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 		// ).
 		Complete(r)
 }
-
-const (
-	clusterNameField = ".spec.clusterName"
-)
 
 func (r *Reconciler) findClusterObject(cluster client.Object) []reconcile.Request {
 	attachedBootstraps := &bv1alpha1.BootstrapList{}
