@@ -904,8 +904,8 @@ github.com/pkg/errors v0.9.1/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINE
 github.com/pkg/profile v1.2.1/go.mod h1:hJw3o1OdXxsrSjjVksARp5W95eeEaEfptyVZyv6JUPA=
 github.com/pkg/sftp v1.10.1/go.mod h1:lYOWFsE0bwd1+KfKJaKeuokY15vzFx25BLbzYYoAxZI=
 github.com/pkg/sftp v1.13.1/go.mod h1:3HaPG6Dq1ILlpPZRO0HVMrsydcdLt6HRDccSgb87qRg=
-github.com/pluralsh/cluster-api-provider-gcp v1.3.2 h1:MMrkNyk2+bxtrYdLBHalaq5qY0r/vkHG/Bd27Z+RhjI=
-github.com/pluralsh/cluster-api-provider-gcp v1.3.2/go.mod h1:n//pMIc9+6wL6h3oj7//D58jOEhVjOr+RIuLsoNr6SY=
+github.com/pluralsh/cluster-api-provider-gcp v1.3.4 h1:S23j/YzaW6kYMPGWwBXSddbHCrt62L59QHqkJyXelzo=
+github.com/pluralsh/cluster-api-provider-gcp v1.3.4/go.mod h1:n//pMIc9+6wL6h3oj7//D58jOEhVjOr+RIuLsoNr6SY=
 github.com/pluralsh/polly v0.1.1 h1:VtbS83re2YuDgscvaFgfzEDZs9uXRV84fCdvKCgIRE4=
 github.com/pluralsh/polly v0.1.1/go.mod h1:Yo1/jcW+4xwhWG+ZJikZy4J4HJkMNPZ7sq5auL2c/tY=
 github.com/pmezard/go-difflib v0.0.0-20151028094244-d8ed2627bdf0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=

@@ -278,5 +278,5 @@ replace (
 	go.etcd.io/etcd/pkg/v3 => go.etcd.io/etcd/pkg/v3 v3.5.0-alpha.0
 	k8s.io/apimachinery => k8s.io/apimachinery v0.25.3
 	k8s.io/client-go => k8s.io/client-go v0.25.3
-	sigs.k8s.io/cluster-api-provider-gcp => github.com/pluralsh/cluster-api-provider-gcp v1.3.2
+	sigs.k8s.io/cluster-api-provider-gcp => github.com/pluralsh/cluster-api-provider-gcp v1.3.4
 )
