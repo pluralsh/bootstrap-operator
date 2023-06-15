@@ -20,6 +20,7 @@ import (
 	bv1alpha1 "github.com/pluralsh/bootstrap-operator/apis/bootstrap/v1alpha1"
 	"github.com/pluralsh/bootstrap-operator/pkg/move"
 	"github.com/pluralsh/bootstrap-operator/pkg/resources/reconciling"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 func (r *Reconciler) moveNamespace(ctx context.Context, bootstrap *bv1alpha1.Bootstrap) error {
@@ -31,11 +32,12 @@ func (r *Reconciler) moveNamespace(ctx context.Context, bootstrap *bv1alpha1.Boo
 }
 
 func (r *Reconciler) move(ctx context.Context, bootstrap *bv1alpha1.Bootstrap) error {
-	r.Log.Info("Move CAPI components")
+	log := log.FromContext(ctx)
+	log.Info("Move CAPI components")
 	var kc coreapi.Secret
 	if err := r.Client.Get(ctx, client.ObjectKey{Name: fmt.Sprintf("%s-kubeconfig", bootstrap.Spec.ClusterName), Namespace: r.Namespace}, &kc); err != nil {
 		if apierrors.IsNotFound(err) {
-			r.Log.Info("CAPI components already moved")
+			log.Info("CAPI components already moved")
 			return nil
 		}
 		return err
@@ -51,7 +53,7 @@ func (r *Reconciler) move(ctx context.Context, bootstrap *bv1alpha1.Bootstrap) e
 		Scheme:      r.Scheme,
 		Client:      r.Client,
 		Ctx:         ctx,
-		Log:         r.Log,
+		Log:         log,
 		Bootstrap:   bootstrap,
 	}
 
@@ -59,7 +61,7 @@ func (r *Reconciler) move(ctx context.Context, bootstrap *bv1alpha1.Bootstrap) e
 	if err != nil {
 		return err
 	}
-	r.Log.Info("toClient created successfully")
+	log.Info("toClient created successfully")
 
 	if err := reconciling.ReconcileNamespaces(ctx, namespaceCreator, r.Namespace, toClient); err != nil {
 		return err

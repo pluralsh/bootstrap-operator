@@ -1,9 +1,10 @@
 package providers
 
 import (
+	"bytes"
+	"encoding/base64"
 	"fmt"
-	"os"
-	"strings"
+	"text/template"
 	"time"
 
 	"github.com/weaveworks/eksctl/pkg/actions/irsa"
@@ -13,20 +14,17 @@ import (
 	infrav1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 	"sigs.k8s.io/yaml"
 
-	awsv1 "github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/credentials"
-	"github.com/aws/aws-sdk-go/aws/session"
-	cfn "github.com/aws/aws-sdk-go/service/cloudformation"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/sts"
+	"github.com/aws/smithy-go/logging"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	awsinfrastructure "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 	"sigs.k8s.io/cluster-api-provider-aws/v2/cmd/clusterawsadm/cloudformation/bootstrap"
-	cloudformation "sigs.k8s.io/cluster-api-provider-aws/v2/cmd/clusterawsadm/cloudformation/service"
-	creds "sigs.k8s.io/cluster-api-provider-aws/v2/cmd/clusterawsadm/credentials"
 	awscontrolplane "sigs.k8s.io/cluster-api-provider-aws/v2/controlplane/eks/api/v1beta2"
 	awsmachinepool "sigs.k8s.io/cluster-api-provider-aws/v2/exp/api/v1beta2"
-	clusterapi "sigs.k8s.io/cluster-api/api/v1beta1"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	clusterapiv1beta1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	clusterapiexp "sigs.k8s.io/cluster-api/exp/api/v1beta1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -37,16 +35,66 @@ import (
 	"github.com/pluralsh/bootstrap-operator/pkg/resources/reconciling"
 )
 
+// AWSCredentialsTemplate generates an AWS credentials file that can
+// be loaded by the various SDKs.
+//
+//nolint:gosec
+const AWSCredentialsTemplate = `[default]
+aws_access_key_id = {{ .AccessKeyID }}
+aws_secret_access_key = {{ .SecretAccessKey }}
+region = {{ .Region }}
+{{if .SessionToken }}
+aws_session_token = {{ .SessionToken }}
+{{end}}
+`
+
 type AWSProvider struct {
-	Data            *resources.TemplateData
-	AccountID       string
-	AccessKeyID     string
-	SecretAccessKey string
-	SessionToken    string
-	Credentials     string
-	Region          string
-	version         string
-	fetchConfigURL  string
+	Data           *resources.TemplateData
+	AWSConf        *aws.Config
+	AccountID      string
+	version        string
+	fetchConfigURL string
+}
+
+type CredsInput struct {
+	aws.Credentials
+	Region string
+}
+
+// // RenderAWSDefaultProfile will render the AWS default profile.
+func (c AWSProvider) RenderAWSDefaultProfile() (string, error) {
+	tmpl, err := template.New("AWS Credentials").Parse(AWSCredentialsTemplate)
+	if err != nil {
+		return "", err
+	}
+
+	creds, err := c.AWSConf.Credentials.Retrieve(c.Data.Ctx)
+	if err != nil {
+		return "", err
+	}
+
+	credsInput := CredsInput{
+		creds,
+		c.AWSConf.Region,
+	}
+
+	var credsFileStr bytes.Buffer
+	err = tmpl.Execute(&credsFileStr, credsInput)
+	if err != nil {
+		return "", err
+	}
+
+	return credsFileStr.String(), nil
+}
+
+// RenderBase64EncodedAWSDefaultProfile will render the AWS default profile, encoded in base 64.
+func (c AWSProvider) RenderBase64EncodedAWSDefaultProfile() (string, error) {
+	profile, err := c.RenderAWSDefaultProfile()
+	if err != nil {
+		return "", err
+	}
+
+	return base64.StdEncoding.EncodeToString([]byte(profile)), nil
 }
 
 const (
@@ -67,30 +115,22 @@ func (aws *AWSProvider) FetchConfigURL() string {
 
 func (aws *AWSProvider) createCredentialSecret() error {
 
-	os.Setenv("AWS_ACCESS_KEY_ID", aws.AccessKeyID)
-	os.Setenv("AWS_SECRET_ACCESS_KEY", aws.SecretAccessKey)
-	os.Setenv("AWS_SESSION_TOKEN", aws.SessionToken)
+	// os.Setenv("AWS_ACCESS_KEY_ID", aws.AccessKeyID)
+	// os.Setenv("AWS_SECRET_ACCESS_KEY", aws.SecretAccessKey)
+	// os.Setenv("AWS_SESSION_TOKEN", aws.SessionToken)
 
 	t := bootstrap.NewTemplate()
-	t.Spec.Region = aws.Region
+	t.Spec.Region = aws.AWSConf.Region
 
-	config := awsv1.
-		NewConfig().
-		WithRegion(aws.Region).
-		WithCredentials(credentials.NewStaticCredentials(aws.AccessKeyID, aws.SecretAccessKey, aws.SessionToken)).
-		WithMaxRetries(3)
+	// cfnSvc := cloudformation.NewService(cfn.NewFromConfig(cfg))
+	// cfnSvc.ReconcileBootstrapStack(t.Spec.StackName, *t.RenderCloudFormation(), t.Spec.StackTags)
+	// // awsCreds, err := cfg.Credentials.Retrieve(aws.Data.Ctx)
+	// awsCreds, err := creds.NewAWSCredentialFromDefaultChain(aws.Region)
+	// if err != nil {
+	// 	return err
+	// }
 
-	sess, err := session.NewSession(config)
-	if err != nil {
-		return err
-	}
-	cfnSvc := cloudformation.NewService(cfn.New(sess))
-	cfnSvc.ReconcileBootstrapStack(t.Spec.StackName, *t.RenderCloudFormation(), t.Spec.StackTags)
-	awsCreds, err := creds.NewAWSCredentialFromDefaultChain(aws.Region)
-	if err != nil {
-		return err
-	}
-	credentials, err := awsCreds.RenderBase64EncodedAWSDefaultProfile()
+	credentials, err := aws.RenderBase64EncodedAWSDefaultProfile()
 	if err != nil {
 		return err
 	}
@@ -103,17 +143,29 @@ func (aws *AWSProvider) createCredentialSecret() error {
 		Data: map[string][]byte{
 			"CAPA_EKS_ADD_ROLES":       []byte("true"),
 			"CAPA_EKS_IAM":             []byte("true"),
-			"AWS_REGION":               []byte(aws.Region),
+			"AWS_REGION":               []byte(aws.AWSConf.Region),
 			"EXP_MACHINE_POOL":         []byte("true"),
 			"EXP_EXTERNAL_RESOURCE_GC": []byte("true"),
 		},
+	}
+
+	roleNamePrefix := aws.Data.Bootstrap.Spec.CloudSpec.AWS.IAMServiceAccount.RoleNamePrefix
+
+	var roleName string
+
+	if roleNamePrefix != nil {
+		if *roleNamePrefix != "" {
+			roleName = fmt.Sprintf("%s-capa-controller-manager", *roleNamePrefix)
+		}
+	} else {
+		roleName = "capa-controller-manager"
 	}
 
 	if aws.Data.Bootstrap.Spec.BootstrapMode {
 		secret.Data["AWS_B64ENCODED_CREDENTIALS"] = []byte(credentials)
 	} else {
 		secret.Data["AWS_B64ENCODED_CREDENTIALS"] = []byte("")
-		secret.Data["AWS_CONTROLLER_IAM_ROLE"] = []byte(fmt.Sprintf("arn:aws:iam::%s:role/capa-controller-manager", aws.AccountID))
+		secret.Data["AWS_CONTROLLER_IAM_ROLE"] = []byte(fmt.Sprintf("arn:aws:iam::%s:role/%s", aws.AccountID, roleName))
 	}
 
 	if err := aws.Data.Client.Create(aws.Data.Ctx, &secret); err != nil {
@@ -164,7 +216,10 @@ func (aws *AWSProvider) Secret() string {
 }
 
 func (aws *AWSProvider) CheckCluster() (*ctrl.Result, error) {
-	var cluster clusterapi.Cluster
+	if err := aws.postInstall(); err != nil {
+		return nil, err
+	}
+	var cluster clusterapiv1beta1.Cluster
 	if err := aws.Data.Client.Get(aws.Data.Ctx, ctrlruntimeclient.ObjectKey{Namespace: aws.Data.Namespace, Name: aws.Data.Bootstrap.Spec.ClusterName}, &cluster); err != nil {
 		return nil, err
 	}
@@ -172,14 +227,14 @@ func (aws *AWSProvider) CheckCluster() (*ctrl.Result, error) {
 		return nil, err
 	}
 	for _, cond := range cluster.Status.Conditions {
-		if cond.Type == clusterv1.ReadyCondition && cond.Status == corev1.ConditionTrue {
+		if cond.Type == clusterapiv1beta1.ReadyCondition && cond.Status == corev1.ConditionTrue {
 			if err := aws.postInstall(); err != nil {
 				return nil, err
 			}
 			return nil, aws.setStatusReady()
 		}
 	}
-	aws.Data.Log.Named("AWS provider").Info("Waiting for AWS cluster to become ready")
+	aws.Data.Log.WithName("AWS provider").Info("Waiting for AWS cluster to become ready")
 	return &ctrl.Result{
 		RequeueAfter: 10 * time.Second,
 	}, nil
@@ -194,7 +249,7 @@ func (aws *AWSProvider) setStatusReady() error {
 	})
 }
 
-func (aws *AWSProvider) updateClusterStatus(status clusterapi.ClusterStatus) error {
+func (aws *AWSProvider) updateClusterStatus(status clusterapiv1beta1.ClusterStatus) error {
 	err := helper.UpdateBootstrapStatus(aws.Data.Ctx, aws.Data.Client, aws.Data.Bootstrap, func(c *bv1alpha1.Bootstrap) {
 		if c.Status.CapiClusterStatus == nil {
 			c.Status.CapiClusterStatus = &bv1alpha1.ClusterStatus{}
@@ -253,48 +308,60 @@ func (aws *AWSProvider) ReconcileCluster() error {
 }
 
 func GetAWSProvider(data *resources.TemplateData) (*AWSProvider, error) {
+	log := data.Log.WithName("AWS provider")
+
+	logger := logging.LoggerFunc(func(classification logging.Classification, format string, v ...interface{}) {
+		// your custom logging
+		log.WithName("Client").Info(format, v...)
+	})
+
 	spec := data.Bootstrap.Spec.CloudSpec.AWS
 
-	var secret corev1.Secret
-	if err := data.Client.Get(data.Ctx, ctrlruntimeclient.ObjectKey{Namespace: data.Namespace, Name: spec.AccessKeyIDRef.Name}, &secret); err != nil {
+	cfg, err := config.LoadDefaultConfig(data.Ctx, config.WithRegion(spec.Region), config.WithLogger(logger))
+	if err != nil {
+		log.Error(err, "unable to load SDK config")
 		return nil, err
 	}
-	accessKeyID := strings.TrimSpace(string(secret.Data[spec.AccessKeyIDRef.Key]))
-	secretAccessKey := strings.TrimSpace(string(secret.Data[spec.SecretAccessKeyRef.Key]))
-	sessionToken := strings.TrimSpace(string(secret.Data[spec.SessionTokenRef.Key]))
-	accountID := strings.TrimSpace(string(secret.Data[spec.AWSAccountIDRef.Key]))
-	data.Log.Named("AWS provider").Info("Create AWS provider")
+	log.V(1).Info("Successfully loaded SDK config")
+
+	sts := sts.NewFromConfig(cfg)
+
+	identiy, err := sts.GetCallerIdentity(data.Ctx, nil)
+	if err != nil {
+		log.Error(err, "unable to get caller identity")
+		return nil, err
+	}
+	log.V(1).Info("Successfully STS", "Account", *identiy.Account)
+
+	log.Info("Create AWS provider")
 	return &AWSProvider{
-		Data:            data,
-		AccountID:       accountID,
-		AccessKeyID:     accessKeyID,
-		SecretAccessKey: secretAccessKey,
-		SessionToken:    sessionToken,
-		Region:          spec.Region,
-		version:         spec.Version,
-		fetchConfigURL:  spec.FetchConfigURL,
+		Data:           data,
+		AccountID:      *identiy.Account,
+		AWSConf:        &cfg,
+		version:        spec.Version,
+		fetchConfigURL: spec.FetchConfigURL,
 	}, nil
 }
 
 func awsClusterCreator(data *resources.TemplateData) reconciling.NamedClusterCreatorGetter {
 	return func() (string, reconciling.ClusterCreator) {
-		return data.Bootstrap.Spec.ClusterName, func(c *clusterapi.Cluster) (*clusterapi.Cluster, error) {
+		return data.Bootstrap.Spec.ClusterName, func(c *clusterapiv1beta1.Cluster) (*clusterapiv1beta1.Cluster, error) {
 			name := data.Bootstrap.Spec.ClusterName
 			c.Name = name
 			c.Namespace = data.Namespace
-			c.Spec = clusterapi.ClusterSpec{
-				ClusterNetwork: &clusterapi.ClusterNetwork{
+			c.Spec = clusterapiv1beta1.ClusterSpec{
+				ClusterNetwork: &clusterapiv1beta1.ClusterNetwork{
 					APIServerPort: data.Bootstrap.Spec.ClusterNetwork.APIServerPort,
 					ServiceDomain: data.Bootstrap.Spec.ClusterNetwork.ServiceDomain,
 				},
 			}
 			if data.Bootstrap.Spec.ClusterNetwork.Pods != nil {
-				c.Spec.ClusterNetwork.Pods = &clusterapi.NetworkRanges{
+				c.Spec.ClusterNetwork.Pods = &clusterapiv1beta1.NetworkRanges{
 					CIDRBlocks: data.Bootstrap.Spec.ClusterNetwork.Pods.CIDRBlocks,
 				}
 			}
 			if data.Bootstrap.Spec.ClusterNetwork.Services != nil {
-				c.Spec.ClusterNetwork.Services = &clusterapi.NetworkRanges{
+				c.Spec.ClusterNetwork.Services = &clusterapiv1beta1.NetworkRanges{
 					CIDRBlocks: data.Bootstrap.Spec.ClusterNetwork.Services.CIDRBlocks,
 				}
 			}
@@ -363,9 +430,9 @@ func awsMachinePoolCreator(mp bv1alpha1.AWSMachinePool, namespace, clusterName s
 			c.Spec = clusterapiexp.MachinePoolSpec{
 				ClusterName: clusterName,
 				Replicas:    mp.Replicas,
-				Template: clusterapi.MachineTemplateSpec{
-					Spec: clusterapi.MachineSpec{
-						Bootstrap: clusterapi.Bootstrap{
+				Template: clusterapiv1beta1.MachineTemplateSpec{
+					Spec: clusterapiv1beta1.MachineSpec{
+						Bootstrap: clusterapiv1beta1.Bootstrap{
 							DataSecretName: resources.StrPtr(""),
 						},
 						ClusterName: clusterName,
@@ -444,10 +511,6 @@ func awsAWSManagedMachinePoolCreator(mp bv1alpha1.AWSMachinePool, namespace stri
 }
 
 func (aws *AWSProvider) installSA(serviceAccounts []bv1alpha1.ClusterIAMServiceAccount) error {
-	os.Setenv("AWS_ACCESS_KEY_ID", aws.AccessKeyID)
-	os.Setenv("AWS_SECRET_ACCESS_KEY", aws.SecretAccessKey)
-	os.Setenv("AWS_SESSION_TOKEN", aws.SessionToken)
-	os.Setenv("AWS_REGION", aws.Region)
 
 	roleNamePrefix := aws.Data.Bootstrap.Spec.CloudSpec.AWS.IAMServiceAccount.RoleNamePrefix
 
@@ -456,7 +519,7 @@ func (aws *AWSProvider) installSA(serviceAccounts []bv1alpha1.ClusterIAMServiceA
 	cfg := api.NewClusterConfig()
 	cmd.ClusterConfig = cfg
 	cmd.ClusterConfig.Metadata.Name = aws.Data.Bootstrap.Spec.ClusterName
-	cmd.ClusterConfig.Metadata.Region = aws.Region
+	cmd.ClusterConfig.Metadata.Region = aws.AWSConf.Region
 	cmd.ProviderConfig.WaitTimeout = time.Minute * 5
 
 	cfg.IAM.WithOIDC = api.Enabled()
@@ -494,9 +557,9 @@ func (aws *AWSProvider) installSA(serviceAccounts []bv1alpha1.ClusterIAMServiceA
 			serviceAccount.RoleOnly = api.Disabled()
 		}
 
-		if sa.AttachPolicy != "" {
+		if sa.AttachPolicy != nil {
 			var attachPolicy map[string]interface{}
-			if err := yaml.Unmarshal([]byte(sa.AttachPolicy), &attachPolicy); err != nil {
+			if err := yaml.Unmarshal(sa.AttachPolicy.Raw, &attachPolicy); err != nil {
 				return err
 			}
 			serviceAccount.AttachPolicy = attachPolicy
@@ -567,35 +630,35 @@ func (aws *AWSProvider) postInstall() error {
 
 func (aws *AWSProvider) MigrateCluster() (*ctrl.Result, error) {
 
-	roleNamePrefix := aws.Data.Bootstrap.Spec.CloudSpec.AWS.IAMServiceAccount.RoleNamePrefix
+	// roleNamePrefix := aws.Data.Bootstrap.Spec.CloudSpec.AWS.IAMServiceAccount.RoleNamePrefix
 
-	var roleName string
+	// var roleName string
 
-	if roleNamePrefix != nil {
-		if *roleNamePrefix != "" {
-			roleName = fmt.Sprintf("%s-capa-controller-manager", *roleNamePrefix)
-		}
-	} else {
-		roleName = "capa-controller-manager"
-	}
+	// if roleNamePrefix != nil {
+	// 	if *roleNamePrefix != "" {
+	// 		roleName = fmt.Sprintf("%s-capa-controller-manager", *roleNamePrefix)
+	// 	}
+	// } else {
+	// 	roleName = "capa-controller-manager"
+	// }
 
-	serviceAccounts := []bv1alpha1.ClusterIAMServiceAccount{
-		{
-			ClusterIAMMeta: bv1alpha1.ClusterIAMMeta{
-				Name:      "capa-controller-manager",
-				Namespace: aws.Data.Namespace,
-			},
-			AttachPolicyARNs:  []string{"arn:aws:iam::aws:policy/AdministratorAccess"},
-			WellKnownPolicies: bv1alpha1.WellKnownPolicies{},
-			RoleName:          roleName,
-			RoleOnly:          true,
-		},
-	}
+	// serviceAccounts := []bv1alpha1.ClusterIAMServiceAccount{
+	// 	{
+	// 		ClusterIAMMeta: bv1alpha1.ClusterIAMMeta{
+	// 			Name:      "capa-controller-manager",
+	// 			Namespace: aws.Data.Namespace,
+	// 		},
+	// 		AttachPolicyARNs:  []string{"arn:aws:iam::aws:policy/AdministratorAccess"},
+	// 		WellKnownPolicies: bv1alpha1.WellKnownPolicies{},
+	// 		RoleName:          roleName,
+	// 		RoleOnly:          true,
+	// 	},
+	// }
 
-	if err := aws.installSA(serviceAccounts); err != nil {
-		return &ctrl.Result{
-			RequeueAfter: 5 * time.Second,
-		}, nil
-	}
+	// if err := aws.installSA(serviceAccounts); err != nil {
+	// 	return &ctrl.Result{
+	// 		RequeueAfter: 5 * time.Second,
+	// 	}, nil
+	// }
 	return nil, nil
 }

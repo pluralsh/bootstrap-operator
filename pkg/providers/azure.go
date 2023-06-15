@@ -44,7 +44,7 @@ func GetAzureProvider(data *resources.TemplateData) (*AzureProvider, error) {
 		gitHubToken = strings.TrimSpace(string(secret.Data[spec.GitHubSecretRef.Key]))
 	}
 
-	data.Log.Named("Azure provider").Info("Create Azure provider")
+	data.Log.WithName("Azure provider").Info("Create Azure provider")
 	return &AzureProvider{
 		Data:           data,
 		version:        azureSpec.Version,
@@ -142,7 +142,7 @@ func (azure *AzureProvider) CheckCluster() (*ctrl.Result, error) {
 			return nil, azure.setStatusReady()
 		}
 	}
-	azure.Data.Log.Named("Azure provider").Info("Waiting for Azure cluster to become ready")
+	azure.Data.Log.WithName("Azure provider").Info("Waiting for Azure cluster to become ready")
 	return &ctrl.Result{
 		RequeueAfter: 10 * time.Second,
 	}, nil

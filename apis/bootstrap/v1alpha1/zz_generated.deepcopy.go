@@ -24,7 +24,7 @@ package v1alpha1
 import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1"
-	runtime "k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/cluster-api/errors"
 )
 
@@ -698,6 +698,11 @@ func (in *ClusterIAMServiceAccount) DeepCopyInto(out *ClusterIAMServiceAccount) 
 		copy(*out, *in)
 	}
 	out.WellKnownPolicies = in.WellKnownPolicies
+	if in.AttachPolicy != nil {
+		in, out := &in.AttachPolicy, &out.AttachPolicy
+		*out = new(runtime.RawExtension)
+		(*in).DeepCopyInto(*out)
+	}
 	if in.Tags != nil {
 		in, out := &in.Tags, &out.Tags
 		*out = make(map[string]string, len(*in))
