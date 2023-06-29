@@ -20,7 +20,7 @@ require (
 	sigs.k8s.io/cluster-api v1.3.7
 	sigs.k8s.io/cluster-api-operator v0.1.0
 	sigs.k8s.io/cluster-api-provider-aws/v2 v2.0.2
-	sigs.k8s.io/cluster-api-provider-azure v1.8.2
+	sigs.k8s.io/cluster-api-provider-azure v1.8.6
 	sigs.k8s.io/cluster-api-provider-gcp v1.3.0
 	sigs.k8s.io/controller-runtime v0.13.1
 	sigs.k8s.io/yaml v1.3.0
