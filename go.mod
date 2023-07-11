@@ -5,7 +5,7 @@ go 1.19
 require (
 	cloud.google.com/go/container v1.18.1
 	github.com/Masterminds/sprig/v3 v3.2.3
-	github.com/aws/aws-sdk-go v1.44.225
+	github.com/aws/aws-sdk-go v1.44.299
 	github.com/cert-manager/cert-manager v1.10.0
 	github.com/pluralsh/polly v0.1.1
 	github.com/spf13/pflag v1.0.5
